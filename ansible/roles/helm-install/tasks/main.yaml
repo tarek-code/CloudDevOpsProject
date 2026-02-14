@@ -1,4 +1,10 @@
 ---
+- name: Install Helm
+  ansible.builtin.shell: |
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+  args:
+    creates: /usr/local/bin/helm
+
 - name: Add EKS Helm repo
   community.kubernetes.helm_repository:
     name: eks
@@ -21,6 +27,12 @@
       serviceAccount:
         create: false
         name: aws-load-balancer-controller
+
+- name: Add Argo Helm repo
+  community.kubernetes.helm_repository:
+    name: argo
+    repo_url: https://argoproj.github.io/argo-helm
+
 - name: Install ArgoCD
   community.kubernetes.helm:
     name: argocd

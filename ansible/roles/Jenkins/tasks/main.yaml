@@ -53,3 +53,20 @@
     name: jenkins
     state: started
     enabled: true
+
+- name: Add Jenkins user to docker group
+  ansible.builtin.user:
+    name: jenkins
+    groups: docker
+    append: true
+    notify: Restart Jenkins
+
+- name: Install kubectl
+  ansible.builtin.get_url:
+    url: https://amazon-eks.s3.us-west-2.amazonaws.com/1.27.6/2026-01-01/bin/linux/amd64/kubectl
+    dest: /usr/local/bin/kubectl
+    mode: "0755"
+
+- name: Update kubeconfig
+  ansible.builtin.shell: |
+    aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}

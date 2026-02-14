@@ -1,9 +1,18 @@
 ---
+- name: Download ALB IAM policy JSON
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.14.1/docs/install/iam_policy.json
+    dest: "{{ role_path }}/files/alb-policy.json"
+    mode: "0644"
+    force: yes # we need to make this step and the others under cuz the nexst step is looking for the policy from my laptop not ec2 and the policy will be downloaded to my laptop in ec2 not laptop
+    delegate_to: localhost
+    run_once: true
+
 - name: Create IAM Policy for ALB Controller
   amazon.aws.iam_policy:
     name: AWSLoadBalancerControllerIAMPolicy
     state: present
-    policy_document: "{{ lookup('file', 'alb-policy.json') }}"
+    policy_document: "{{ lookup('file', role_path + '/files/alb-policy.json') }}"
 
 - name: Associate IAM OIDC provider with EKS cluster
   amazon.aws.eks_oidc_provider:
@@ -13,4 +22,4 @@
 - name: Create Kubernetes ServiceAccount for ALB Controller
   kubernetes.core.k8s:
     state: present
-    definition: "{{ lookup('template', 'serviceaccount.yaml.j2') }}"
+    definition: "{{ lookup('template', role_path + '/templates/serviceaccount.yaml.j2') }}"

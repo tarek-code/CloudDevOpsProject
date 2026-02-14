@@ -2,11 +2,12 @@
 - name: Setup required packages, Jenkins, HELM in EKS, ALB IAM Setup
   hosts: service_jenkins
   become: yes
-  gather_facts: false
+  gather_facts: yes
   vars:
     cluster_name: "my-eks-cluster"
     aws_account_id: "183631347882"
+    aws_region: "us-east-1"
   roles:
+    - role: Jenkins
     - role: helm-install
     - role: alb-iam
-    - role: Jenkins
