@@ -1,0 +1,55 @@
+---
+- name: Update all packages
+  ansible.builtin.yum:
+    name: "*"
+    state: latest
+
+- name: Install required packages
+  ansible.builtin.yum:
+    name:
+      - git
+      - java-11-openjdk
+      - docker
+      - trivy
+      - tar
+      - unzip
+      - vim
+      - nano
+      - curl
+      - telnet
+      - net-tools
+      - iputils
+      - dnsutils
+      - tcpdump
+      - traceroute
+      - telnet
+      - netcat
+      - nc
+      - nmap
+      - wireshark
+    state: present
+
+- name: Start and enable Docker
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Add Jenkins repo
+  ansible.builtin.yum_repository:
+    name: jenkins
+    description: Jenkins repo
+    baseurl: https://pkg.jenkins.io/redhat-stable
+    gpgcheck: yes
+    gpgkey: https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+
+- name: Install Jenkins
+  ansible.builtin.yum:
+    name: jenkins
+    state: present
+
+- name: Start and enable Jenkins
+  ansible.builtin.service:
+    name: jenkins
+    state: started
+    enabled: true

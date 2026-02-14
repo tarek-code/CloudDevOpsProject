@@ -1,0 +1,16 @@
+---
+- name: Create IAM Policy for ALB Controller
+  amazon.aws.iam_policy:
+    name: AWSLoadBalancerControllerIAMPolicy
+    state: present
+    policy_document: "{{ lookup('file', 'alb-policy.json') }}"
+
+- name: Associate IAM OIDC provider with EKS cluster
+  amazon.aws.eks_oidc_provider:
+    cluster_name: "{{ cluster_name }}"
+    state: present
+
+- name: Create Kubernetes ServiceAccount for ALB Controller
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', 'serviceaccount.yaml.j2') }}"

@@ -1,0 +1,29 @@
+---
+- name: Add EKS Helm repo
+  community.kubernetes.helm_repository:
+    name: eks
+    repo_url: https://aws.github.io/eks-charts
+
+- name: Update Helm repos
+  community.kubernetes.helm_repository:
+    name: eks
+    repo_url: https://aws.github.io/eks-charts
+    update_cache: yes
+
+- name: Install AWS Load Balancer Controller
+  community.kubernetes.helm:
+    name: aws-load-balancer-controller
+    chart_ref: eks/aws-load-balancer-controller
+    release_namespace: kube-system
+    create_namespace: false
+    values:
+      clusterName: "{{ cluster_name }}"
+      serviceAccount:
+        create: false
+        name: aws-load-balancer-controller
+- name: Install ArgoCD
+  community.kubernetes.helm:
+    name: argocd
+    chart_ref: argo/argo-cd
+    release_namespace: argocd
+    create_namespace: true
