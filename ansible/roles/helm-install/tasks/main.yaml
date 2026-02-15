@@ -35,33 +35,6 @@
   environment: "{{ helm_env }}"
   changed_when: true
 
-- name: Install AWS Load Balancer Controller
-  ansible.builtin.shell: |
-    /usr/local/bin/helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
-      -n kube-system \
-      --set clusterName={{ cluster_name }} \
-      --set serviceAccount.create=false \
-      --set serviceAccount.name=aws-load-balancer-controller
-  environment: "{{ helm_env }}"
-  changed_when: true
-
-- name: Wait for ALB Controller webhook to be ready (required before creating any Service)
-  ansible.builtin.shell: |
-    for i in $(seq 1 24); do
-      if kubectl get endpoints -n kube-system aws-load-balancer-webhook-service -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | grep -q .; then
-        echo "Webhook has endpoints"
-        exit 0
-      fi
-      echo "Waiting for webhook endpoints... ($i/24)"
-      sleep 10
-    done
-    echo "Timeout waiting for webhook"
-    exit 1
-  environment: "{{ helm_env }}"
-  register: alb_webhook_wait
-  changed_when: false
-  failed_when: alb_webhook_wait.rc != 0
-
 - name: Add Argo Helm repo
   ansible.builtin.shell: /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm
   environment: "{{ helm_env }}"
@@ -108,4 +81,14 @@
   retries: 5
   delay: 20
   until: argocd_apply.rc == 0
+  changed_when: true
+
+- name: Install AWS Load Balancer Controller (after ArgoCD so webhook is not required during ArgoCD install)
+  ansible.builtin.shell: |
+    /usr/local/bin/helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+      -n kube-system \
+      --set clusterName={{ cluster_name }} \
+      --set serviceAccount.create=false \
+      --set serviceAccount.name=aws-load-balancer-controller
+  environment: "{{ helm_env }}"
   changed_when: true
