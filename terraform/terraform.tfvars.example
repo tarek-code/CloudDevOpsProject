@@ -1,0 +1,58 @@
+# Copy to terraform.tfvars and set values. Do not commit terraform.tfvars.
+# Sensitive: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (use Terraform Cloud or env).
+
+# -----------------------------------------------------------------------------
+# AWS / Provider
+# -----------------------------------------------------------------------------
+aws_region     = "us-east-1"
+aws_profile    = "default"
+aws_account_id = "YOUR_AWS_ACCOUNT_ID"
+
+# -----------------------------------------------------------------------------
+# Project / Naming
+# -----------------------------------------------------------------------------
+project_name = "ivolve"
+
+# -----------------------------------------------------------------------------
+# VPC
+# -----------------------------------------------------------------------------
+vpc_cidr                = "10.0.0.0/16"
+vpc_azs                 = ["us-east-1a", "us-east-1b"]
+vpc_public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
+
+allowed_cidr      = "0.0.0.0/0"
+ssh_port          = 22
+jenkins_port      = 8080
+https_port        = 443
+egress_from_port  = 0
+egress_to_port    = 0
+egress_protocol   = "-1"
+egress_cidr       = "0.0.0.0/0"
+
+# -----------------------------------------------------------------------------
+# Jenkins EC2
+# -----------------------------------------------------------------------------
+jenkins_instance_type = "t3.medium"
+jenkins_key_name      = "jenkins_key"  # Must exist in AWS in this region
+jenkins_ansible_tag   = "jenkins"
+
+# -----------------------------------------------------------------------------
+# EKS
+# -----------------------------------------------------------------------------
+eks_cluster_name    = "ivolve-eks"
+eks_cluster_version = "1.27"
+
+# -----------------------------------------------------------------------------
+# SNS / Alerts
+# -----------------------------------------------------------------------------
+sns_alert_topic_name = "jenkins-alerts-topic"
+sns_alert_email      = "your-email@example.com"
+
+# -----------------------------------------------------------------------------
+# CloudWatch Alarm
+# -----------------------------------------------------------------------------
+cloudwatch_alarm_name              = "jenkins-ec2-high-cpu"
+cloudwatch_alarm_threshold         = 70
+cloudwatch_alarm_evaluation_periods = 2
+cloudwatch_alarm_period            = 300
+cloudwatch_alarm_description       = "CPU > 70% for Jenkins EC2"

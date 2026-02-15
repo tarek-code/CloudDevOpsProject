@@ -3,10 +3,11 @@
   hosts: service_jenkins
   become: yes
   gather_facts: yes
+  # Must match Terraform: eks_cluster_name, aws_region, aws_account_id; inventory tag service = jenkins_ansible_tag
   vars:
-    cluster_name: "my-eks-cluster"
-    aws_account_id: "183631347882"
-    aws_region: "us-east-1"
+    cluster_name: "ivolve-eks" # same as terraform var eks_cluster_name
+    aws_account_id: "183631347882" # same as terraform var aws_account_id
+    aws_region: "us-east-1" # same as terraform var aws_region
   roles:
     - role: Jenkins
     - role: helm-install
