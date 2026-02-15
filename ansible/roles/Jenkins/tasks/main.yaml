@@ -6,13 +6,33 @@
     executable: /bin/bash
   changed_when: true
 
-- name: Install required packages
+- name: Install required packages (Java 21 for Jenkins 2.541 LTS)
   ansible.builtin.shell: |
-    yum install -y git java-11-openjdk docker trivy tar unzip vim nano curl telnet \
-      net-tools iputils dnsutils tcpdump traceroute netcat nmap wireshark
+    yum install -y git docker trivy tar unzip vim nano curl telnet \
+      net-tools iputils dnsutils tcpdump traceroute netcat nmap wireshark fontconfig
   args:
     executable: /bin/bash
   changed_when: true
+
+# Jenkins 2.541 LTS needs Java 17+. Use Corretto 17 from amazon-linux-extras (works on AL2)
+- name: Enable Corretto 17 and install Java 17 for Jenkins LTS
+  ansible.builtin.shell: |
+    amazon-linux-extras enable corretto17
+    yum install -y java-17-amazon-corretto
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+- name: Set Java 17 as system default
+  ansible.builtin.shell: |
+    J17=$(ls -d /usr/lib/jvm/java-17-amazon-corretto* 2>/dev/null | head -1)
+    if [ -n "$J17" ] && [ -x "$J17/bin/java" ]; then
+      alternatives --set java "$J17/bin/java" 2>/dev/null || true
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  ignore_errors: true
 
 - name: Start and enable Docker
   ansible.builtin.service:
@@ -50,7 +70,7 @@
     name: jenkins
     groups: docker
     append: true
-    notify: Restart Jenkins
+  notify: Restart Jenkins
 
 - name: Install kubectl
   ansible.builtin.get_url:
