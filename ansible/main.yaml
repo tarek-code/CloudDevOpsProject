@@ -8,12 +8,16 @@
   tasks:
     - name: Install Python 3.8 and pip (Amazon Linux 2)
       ansible.builtin.raw: |
-        if ! command -v /usr/bin/python3.8 >/dev/null 2>&1; then
-          sudo amazon-linux-extras install -y python3.8 2>/dev/null || true
-          sudo yum install -y python38 python38-pip 2>/dev/null || true
-        fi
-      changed_when: false
+        command -v /usr/bin/python3.8 >/dev/null 2>&1 && exit 0
+        export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+        timeout 600 bash -c '
+          amazon-linux-extras enable -y python3.8
+          yum install -y python3.8 2>&1
+        '
+      args:
+        executable: /bin/bash
       register: py_install
+      changed_when: false
     - name: Ensure Python 3.8 is available
       ansible.builtin.raw: test -x /usr/bin/python3.8 && /usr/bin/python3.8 -c 'import sys; print(sys.version)'
       register: py_check
