@@ -1,4 +1,25 @@
 ---
+# Bootstrap: install Python 3.8 on Amazon Linux 2 so Ansible's modules (which require 3.8+) can run.
+# Uses 'raw' so no Python is required on the target yet.
+- name: Bootstrap Python 3.8 on Jenkins hosts
+  hosts: service_jenkins
+  gather_facts: false
+  become: yes
+  tasks:
+    - name: Install Python 3.8 and pip (Amazon Linux 2)
+      ansible.builtin.raw: |
+        if ! command -v /usr/bin/python3.8 >/dev/null 2>&1; then
+          sudo amazon-linux-extras install -y python3.8 2>/dev/null || true
+          sudo yum install -y python38 python38-pip 2>/dev/null || true
+        fi
+      changed_when: false
+      register: py_install
+    - name: Ensure Python 3.8 is available
+      ansible.builtin.raw: test -x /usr/bin/python3.8 && /usr/bin/python3.8 -c 'import sys; print(sys.version)'
+      register: py_check
+      changed_when: false
+      failed_when: py_check.rc != 0
+
 - name: Setup required packages, Jenkins, HELM in EKS, ALB IAM Setup
   hosts: service_jenkins
   become: yes
