@@ -69,11 +69,11 @@ Graduation project: CI/CD with Jenkins, ArgoCD, Kubernetes (EKS), Terraform (AWS
 
 - Ensure `ansible/main.yaml` vars match Terraform: `cluster_name` = EKS name, `aws_region`, `aws_account_id`.
 - From repo root (no GitHub credential):  
-  `ansible-playbook -i ansible/inventory/aws-ec2.yaml ansible/main.yaml`
+  `ansible-playbook -i ansible/inventory/ec2.aws_ec2.yaml ansible/main.yaml`
 - **GitHub username and token passed by Ansible to Jenkins (no manual Jenkins config):**  
   Run the playbook with your GitHub username and token; Ansible will inject them into Jenkins via JCasC so the pipeline can push to Git. One command:
   ```bash
-  ansible-playbook -i ansible/inventory/aws-ec2.yaml ansible/main.yaml \
+  ansible-playbook -i ansible/inventory/ec2.aws_ec2.yaml ansible/main.yaml \
     -e jenkins_github_username=YOUR_GITHUB_USERNAME \
     -e jenkins_github_token=YOUR_GITHUB_PAT
   ```

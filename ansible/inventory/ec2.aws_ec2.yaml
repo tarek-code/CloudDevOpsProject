@@ -1,8 +1,8 @@
 ---
-# Requires: ansible-galaxy collection install amazon.aws
+# Dynamic inventory: requires amazon.aws collection + boto3; filename must end with .aws_ec2.yaml
 plugin: amazon.aws.aws_ec2
 regions:
-  - us-east-1 # Change to your AWS region
+  - us-east-1
 filters:
   instance-state-name: running
   tag:service: jenkins
