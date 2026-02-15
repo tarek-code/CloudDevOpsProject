@@ -1,35 +1,18 @@
 ---
+# Use shell for yum so we don't require the dnf Python module under python3.8
 - name: Update all packages
-  ansible.builtin.yum:
-    name: "*"
-    state: latest
-    use_backend: dnf4
+  ansible.builtin.shell: yum update -y
+  args:
+    executable: /bin/bash
+  changed_when: true
 
 - name: Install required packages
-  ansible.builtin.yum:
-    use_backend: dnf4
-    name:
-      - git
-      - java-11-openjdk
-      - docker
-      - trivy
-      - tar
-      - unzip
-      - vim
-      - nano
-      - curl
-      - telnet
-      - net-tools
-      - iputils
-      - dnsutils
-      - tcpdump
-      - traceroute
-      - telnet
-      - netcat
-      - nc
-      - nmap
-      - wireshark
-    state: present
+  ansible.builtin.shell: |
+    yum install -y git java-11-openjdk docker trivy tar unzip vim nano curl telnet \
+      net-tools iputils dnsutils tcpdump traceroute netcat nmap wireshark
+  args:
+    executable: /bin/bash
+  changed_when: true
 
 - name: Start and enable Docker
   ansible.builtin.service:
@@ -38,18 +21,27 @@
     enabled: true
 
 - name: Add Jenkins repo
-  ansible.builtin.yum_repository:
-    name: jenkins
-    description: Jenkins repo
-    baseurl: https://pkg.jenkins.io/redhat-stable
-    gpgcheck: yes
-    gpgkey: https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+  ansible.builtin.copy:
+    dest: /etc/yum.repos.d/jenkins.repo
+    content: |
+      [jenkins]
+      name=Jenkins repo
+      baseurl=https://pkg.jenkins.io/redhat-stable
+      gpgcheck=1
+      gpgkey=https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+    mode: "0644"
+
+- name: Import Jenkins repo GPG key
+  ansible.builtin.shell: rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+  args:
+    executable: /bin/bash
+  changed_when: false
 
 - name: Install Jenkins
-  ansible.builtin.yum:
-    name: jenkins
-    state: present
-    use_backend: dnf4
+  ansible.builtin.shell: yum install -y jenkins
+  args:
+    executable: /bin/bash
+  changed_when: true
 
 - name: Start and enable Jenkins
   ansible.builtin.service:
