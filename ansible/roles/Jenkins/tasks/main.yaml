@@ -72,9 +72,9 @@
     append: true
   notify: Restart Jenkins
 
-- name: Install kubectl
+- name: Install kubectl (match EKS 1.29)
   ansible.builtin.get_url:
-    url: https://amazon-eks.s3.us-west-2.amazonaws.com/1.27.6/2026-01-01/bin/linux/amd64/kubectl
+    url: https://s3.us-west-2.amazonaws.com/amazon-eks/1.29.15/2025-11-13/bin/linux/amd64/kubectl
     dest: /usr/local/bin/kubectl
     mode: "0755"
 
