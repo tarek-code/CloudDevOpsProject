@@ -8,6 +8,9 @@
     mode: "0644"
 
 - name: Apply ServiceAccount to cluster
-  ansible.builtin.shell: kubectl apply -f /tmp/alb-serviceaccount.yaml
+  ansible.builtin.shell: /usr/local/bin/kubectl apply -f /tmp/alb-serviceaccount.yaml
+  environment:
+    KUBECONFIG: /root/.kube/config
+    PATH: "/usr/local/bin:/usr/bin:/bin"
   register: sa_apply
   changed_when: true
