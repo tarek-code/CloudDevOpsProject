@@ -8,7 +8,9 @@ module "vpc" {
   cidr                 = var.vpc_cidr
   azs                  = var.vpc_azs
   public_subnets       = var.vpc_public_subnet_cidrs
-  enable_nat_gateway   = var.vpc_enable_nat_gateway
+  private_subnets      = var.vpc_private_subnet_cidrs
+  enable_nat_gateway   = true
+  single_nat_gateway   = var.vpc_single_nat_gateway
   enable_vpn_gateway   = var.vpc_enable_vpn_gateway
   enable_dns_hostnames = var.vpc_enable_dns_hostnames
   create_igw           = var.vpc_enable_internet_gateway
@@ -22,6 +24,15 @@ module "vpc" {
   public_outbound_acl_rules = [
     { rule_number = 100, rule_action = "allow", from_port = var.egress_from_port, to_port = var.egress_to_port, protocol = var.egress_protocol, cidr_block = var.egress_cidr }
   ]
+
+  public_subnet_tags = {
+    "kubernetes.io/role/elb"                      = "1"
+    "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
+  }
+  private_subnet_tags = {
+    "kubernetes.io/role/internal-elb"            = "1"
+    "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
+  }
 
   tags = {
     Name = "${var.project_name}-vpc"
@@ -187,16 +198,17 @@ module "eks" {
   name                   = var.eks_cluster_name
   kubernetes_version     = var.eks_cluster_version
   vpc_id                 = module.vpc.vpc_id
-  subnet_ids             = module.vpc.public_subnets
+  subnet_ids             = concat(module.vpc.public_subnets, module.vpc.private_subnets)
   endpoint_public_access = true
   tags = {
     Name = var.eks_cluster_name
   }
 
+  # Fargate requires private subnets
   fargate_profiles = {
     fargate_profile = {
       name       = "${var.project_name}-fargate-profile"
-      subnet_ids = module.vpc.public_subnets
+      subnet_ids = module.vpc.private_subnets
       selectors  = [{ namespace = "kube-system" }, { namespace = "default" }, { namespace = "ivolve" }]
       tags = {
         Name = "${var.project_name}-fargate-profile"

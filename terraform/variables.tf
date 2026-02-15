@@ -61,10 +61,22 @@ variable "vpc_public_subnet_cidrs" {
   default     = ["10.0.1.0/24", "10.0.2.0/24"]
 }
 
+variable "vpc_private_subnet_cidrs" {
+  type        = list(string)
+  description = "CIDR blocks for private subnets (one per AZ); required for EKS Fargate"
+  default     = ["10.0.11.0/24", "10.0.12.0/24"]
+}
+
 variable "vpc_enable_nat_gateway" {
   type        = bool
-  description = "Enable NAT gateway for private subnets"
+  description = "Enable NAT gateway for private subnets (overridden to true when using Fargate)"
   default     = false
+}
+
+variable "vpc_single_nat_gateway" {
+  type        = bool
+  description = "Use a single NAT gateway for all private subnets (cheaper)"
+  default     = true
 }
 
 variable "vpc_enable_vpn_gateway" {
@@ -205,8 +217,8 @@ variable "eks_cluster_name" {
 
 variable "eks_cluster_version" {
   type        = string
-  description = "Kubernetes version for EKS"
-  default     = "1.27"
+  description = "Kubernetes version for EKS (1.29+ required if module enables EKS Auto Mode)"
+  default     = "1.29"
 }
 
 # -----------------------------------------------------------------------------
