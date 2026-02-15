@@ -20,19 +20,15 @@
     state: started
     enabled: true
 
-- name: Add Jenkins repo
-  ansible.builtin.copy:
+- name: Add Jenkins repo (official LTS rpm-stable)
+  ansible.builtin.get_url:
+    url: https://pkg.jenkins.io/rpm-stable/jenkins.repo
     dest: /etc/yum.repos.d/jenkins.repo
-    content: |
-      [jenkins]
-      name=Jenkins repo
-      baseurl=https://pkg.jenkins.io/redhat-stable
-      gpgcheck=1
-      gpgkey=https://pkg.jenkins.io/redhat-stable/jenkins.io.key
     mode: "0644"
+    force: true
 
-- name: Import Jenkins repo GPG key
-  ansible.builtin.shell: rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+- name: Import Jenkins 2026 LTS GPG key
+  ansible.builtin.shell: rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io-2026.key
   args:
     executable: /bin/bash
   changed_when: false
