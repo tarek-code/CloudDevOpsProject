@@ -3,9 +3,11 @@
   ansible.builtin.yum:
     name: "*"
     state: latest
+    use_backend: dnf4
 
 - name: Install required packages
   ansible.builtin.yum:
+    use_backend: dnf4
     name:
       - git
       - java-11-openjdk
@@ -47,6 +49,7 @@
   ansible.builtin.yum:
     name: jenkins
     state: present
+    use_backend: dnf4
 
 - name: Start and enable Jenkins
   ansible.builtin.service:
