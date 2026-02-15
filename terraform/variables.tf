@@ -9,8 +9,8 @@ variable "aws_region" {
 
 variable "aws_profile" {
   type        = string
-  description = "AWS CLI profile name"
-  default     = "default"
+  description = "AWS CLI profile name (leave null/empty when using Terraform Cloud or env credentials)"
+  default     = null
 }
 
 variable "aws_account_id" {
