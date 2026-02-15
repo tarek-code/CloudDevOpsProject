@@ -218,6 +218,22 @@ module "eks" {
     }
   }
 
+  # Grant Jenkins EC2 IAM role access to the cluster (for Helm/kubectl from Ansible and pipelines)
+  access_entries = {
+    jenkins_ec2 = {
+      principal_arn     = aws_iam_role.jenkins_ec2.arn
+      type              = "STANDARD"
+      policy_associations = {
+        cluster_admin = {
+          policy_arn  = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster"
+          }
+        }
+      }
+    }
+  }
+
   # Fargate requires private subnets
   fargate_profiles = {
     fargate_profile = {
