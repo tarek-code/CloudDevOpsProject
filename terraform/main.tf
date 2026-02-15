@@ -3,7 +3,7 @@
 ##############################
 module "vpc" {
   source                  = "terraform-aws-modules/vpc/aws"
-  version                 = var.vpc_module_version
+  version                 = "5.1.0"
   name                    = "${var.project_name}-vpc"
   cidr                    = var.vpc_cidr
   azs                     = var.vpc_azs
@@ -33,7 +33,7 @@ module "vpc" {
 ##############################
 module "security_group" {
   source  = "terraform-aws-modules/security-group/aws"
-  version = var.security_group_module_version
+  version = "5.1.0"
   name    = "${var.project_name}-jenkins-security-group"
   vpc_id  = module.vpc.vpc_id
 
@@ -87,7 +87,7 @@ data "aws_ami" "amazon_linux" {
 ##############################
 module "jenkins-ec2" {
   source                      = "terraform-aws-modules/ec2-instance/aws"
-  version                     = var.ec2_instance_module_version
+  version                     = "5.1.0"
   name                        = "${var.project_name}-jenkins-ec2"
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.jenkins_instance_type
@@ -105,7 +105,7 @@ module "jenkins-ec2" {
 ##############################
 module "eks" {
   source          = "terraform-aws-modules/eks/aws"
-  version         = var.eks_module_version
+  version         = "20.1.0"
   cluster_name    = var.eks_cluster_name
   cluster_version = var.eks_cluster_version
   vpc_id          = module.vpc.vpc_id
@@ -132,7 +132,7 @@ module "eks" {
 
 module "sns_alerts" {
   source  = "terraform-aws-modules/sns/aws"
-  version = var.sns_module_version
+  version = "6.2.1"
 
   name = var.sns_alert_topic_name
 

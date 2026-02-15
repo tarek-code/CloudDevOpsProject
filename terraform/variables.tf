@@ -41,33 +41,6 @@ variable "project_name" {
 }
 
 # -----------------------------------------------------------------------------
-# Module versions (registry versions for terraform-aws-modules)
-# -----------------------------------------------------------------------------
-variable "vpc_module_version" {
-  type        = string
-  description = "Terraform registry version of terraform-aws-modules/vpc/aws"
-  default     = "5.1.0"
-}
-
-variable "security_group_module_version" {
-  type        = string
-  description = "Terraform registry version of terraform-aws-modules/security-group/aws"
-  default     = "5.1.0"
-}
-
-variable "ec2_instance_module_version" {
-  type        = string
-  description = "Terraform registry version of terraform-aws-modules/ec2-instance/aws"
-  default     = "5.1.0"
-}
-
-variable "eks_module_version" {
-  type        = string
-  description = "Terraform registry version of terraform-aws-modules/eks/aws"
-  default     = "20.1.0"
-}
-
-# -----------------------------------------------------------------------------
 # VPC
 # -----------------------------------------------------------------------------
 variable "vpc_cidr" {
@@ -230,12 +203,6 @@ variable "eks_cluster_version" {
 # -----------------------------------------------------------------------------
 # SNS / Alerts
 # -----------------------------------------------------------------------------
-variable "sns_module_version" {
-  type        = string
-  description = "Terraform registry version of terraform-aws-modules/sns/aws"
-  default     = "6.2.1"
-}
-
 variable "sns_alert_topic_name" {
   type        = string
   description = "SNS topic name for alerts"

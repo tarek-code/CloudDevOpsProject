@@ -14,14 +14,6 @@ aws_account_id = "YOUR_AWS_ACCOUNT_ID"
 project_name = "ivolve"
 
 # -----------------------------------------------------------------------------
-# Module versions
-# -----------------------------------------------------------------------------
-vpc_module_version            = "5.1.0"
-security_group_module_version = "5.1.0"
-ec2_instance_module_version   = "5.1.0"
-eks_module_version            = "20.1.0"
-
-# -----------------------------------------------------------------------------
 # VPC
 # -----------------------------------------------------------------------------
 vpc_cidr                   = "10.0.0.0/16"
@@ -62,7 +54,6 @@ eks_cluster_version = "1.27"
 # -----------------------------------------------------------------------------
 # SNS / Alerts
 # -----------------------------------------------------------------------------
-sns_module_version        = "6.2.1"
 sns_alert_topic_name      = "jenkins-alerts-topic"
 sns_alert_email           = "your-email@example.com"
 sns_subscription_protocol  = "email"
