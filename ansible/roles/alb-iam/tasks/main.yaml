@@ -8,16 +8,33 @@
     delegate_to: localhost
     run_once: true
 
-- name: Create IAM Policy for ALB Controller
-  amazon.aws.iam_policy:
-    name: AWSLoadBalancerControllerIAMPolicy
-    state: present
-    policy_document: "{{ lookup('file', role_path + '/files/alb-policy.json') }}"
+- name: Create IAM Policy for ALB Controller (AWS CLI)
+  ansible.builtin.shell: |
+    aws iam create-policy \
+      --policy-name AWSLoadBalancerControllerIAMPolicy \
+      --policy-document file://{{ role_path }}/files/alb-policy.json \
+      --description "IAM policy for AWS Load Balancer Controller"
+  args:
+    executable: /bin/bash
+  register: iam_policy_result
+  failed_when: iam_policy_result.rc != 0 and 'EntityAlreadyExists' not in iam_policy_result.stderr
+  delegate_to: localhost
+  run_once: true
 
-- name: Associate IAM OIDC provider with EKS cluster
-  amazon.aws.eks_oidc_provider:
-    cluster_name: "{{ cluster_name }}"
-    state: present
+- name: Ensure EKS OIDC IAM provider exists (AWS CLI, skip if already exists)
+  ansible.builtin.shell: |
+    OIDC_URL=$(aws eks describe-cluster --name {{ cluster_name }} --query 'cluster.identity.oidc.issuer' --output text 2>/dev/null | sed -e 's|https://||')
+    [ -z "$OIDC_URL" ] && exit 0
+    aws iam create-open-id-connect-provider \
+      --url "https://$OIDC_URL" \
+      --client-id-list sts.amazonaws.com \
+      --thumbprint-list 9e99a48a9960b14926bb7f3b02e22da2b0ab7280 2>/dev/null || true
+  args:
+    executable: /bin/bash
+  delegate_to: localhost
+  run_once: true
+  changed_when: false
+  failed_when: false
 
 - name: Create Kubernetes ServiceAccount manifest for ALB Controller
   ansible.builtin.template:
