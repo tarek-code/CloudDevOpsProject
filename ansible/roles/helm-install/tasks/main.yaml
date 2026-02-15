@@ -1,21 +1,23 @@
 ---
 - name: Install Helm
   ansible.builtin.shell: |
+    export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
     curl -fsSL https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
   args:
+    executable: /bin/bash
     creates: /usr/local/bin/helm
 
 - name: Add EKS Helm repo
-  ansible.builtin.shell: helm repo add eks https://aws.github.io/eks-charts
+  ansible.builtin.shell: /usr/local/bin/helm repo add eks https://aws.github.io/eks-charts
   changed_when: true
 
 - name: Update Helm repos
-  ansible.builtin.shell: helm repo update
+  ansible.builtin.shell: /usr/local/bin/helm repo update
   changed_when: true
 
 - name: Install AWS Load Balancer Controller
   ansible.builtin.shell: |
-    helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+    /usr/local/bin/helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
       -n kube-system \
       --set clusterName={{ cluster_name }} \
       --set serviceAccount.create=false \
@@ -23,16 +25,16 @@
   changed_when: true
 
 - name: Add Argo Helm repo
-  ansible.builtin.shell: helm repo add argo https://argoproj.github.io/argo-helm
+  ansible.builtin.shell: /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm
   changed_when: true
 
 - name: Update Helm repos (Argo)
-  ansible.builtin.shell: helm repo update
+  ansible.builtin.shell: /usr/local/bin/helm repo update
   changed_when: true
 
 - name: Install ArgoCD
   ansible.builtin.shell: |
-    helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
+    /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
   changed_when: true
 
 - name: Copy ArgoCD Application manifest to host

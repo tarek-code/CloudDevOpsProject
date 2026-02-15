@@ -28,21 +28,27 @@
     group: jenkins
     mode: "0644"
 
-- name: Set CASC_JENKINS_CONFIG in Jenkins sysconfig (replace if present)
-  ansible.builtin.lineinfile:
-    path: "{{ jenkins_sysconfig }}"
-    regexp: "^#?CASC_JENKINS_CONFIG="
-    line: "CASC_JENKINS_CONFIG={{ jenkins_home }}/casc.yaml"
-  register: casc_line_updated
+# Jenkins 2.335+ uses systemd; set CASC via systemd drop-in (not /etc/sysconfig/jenkins)
+- name: Ensure Jenkins systemd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/jenkins.service.d
+    state: directory
+    mode: "0755"
+
+- name: Set CASC_JENKINS_CONFIG via systemd override
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/jenkins.service.d/override.conf
+    content: |
+      [Service]
+      Environment="CASC_JENKINS_CONFIG={{ jenkins_home }}/casc.yaml"
+    mode: "0644"
+  register: casc_override_updated
   notify: Restart Jenkins
 
-- name: Append CASC_JENKINS_CONFIG if not in file
-  ansible.builtin.lineinfile:
-    path: "{{ jenkins_sysconfig }}"
-    line: "CASC_JENKINS_CONFIG={{ jenkins_home }}/casc.yaml"
-    insertafter: EOF
-  when: "'CASC_JENKINS_CONFIG' not in (lookup('file', jenkins_sysconfig) | default(''))"
-  notify: Restart Jenkins
+- name: Reload systemd after Jenkins override change
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: casc_override_updated.changed
 
 - name: Restart Jenkins to load JCasC and Shared Library config
   ansible.builtin.service:
