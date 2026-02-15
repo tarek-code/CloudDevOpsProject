@@ -1,4 +1,13 @@
 ---
+- name: Ensure kubeconfig exec apiVersion is v1beta1 (Helm does not support v1alpha1)
+  ansible.builtin.shell: |
+    for f in /root/.kube/config /home/ec2-user/.kube/config; do
+      [ -f "$f" ] && sed -i 's/client\.authentication\.k8s\.io\/v1alpha1/client.authentication.k8s.io\/v1beta1/g' "$f" || true
+    done
+  args:
+    executable: /bin/bash
+  changed_when: false
+
 - name: Install Helm
   ansible.builtin.shell: |
     export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"

@@ -82,11 +82,12 @@
   ansible.builtin.shell: |
     aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
 
-- name: Fix kubeconfig exec apiVersion for Helm/kubectl (v1alpha1 deprecated)
-  ansible.builtin.replace:
-    path: /root/.kube/config
-    regexp: 'client\.authentication\.k8s\.io/v1alpha1'
-    replace: 'client.authentication.k8s.io/v1beta1'
+- name: Fix kubeconfig exec apiVersion (v1alpha1 not supported by Helm/kubectl)
+  ansible.builtin.shell: |
+    [ -f /root/.kube/config ] && sed -i 's/client\.authentication\.k8s\.io\/v1alpha1/client.authentication.k8s.io\/v1beta1/g' /root/.kube/config || true
+  args:
+    executable: /bin/bash
+  changed_when: false
 
 - name: Configure Jenkins Shared Library (JCasC)
   ansible.builtin.include_tasks: jenkins-shared-library.yaml
