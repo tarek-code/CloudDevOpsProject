@@ -1,8 +1,11 @@
 ---
-- name: Ensure kubeconfig exec apiVersion is v1beta1 (Helm does not support v1alpha1)
+- name: Ensure kubeconfig uses v1beta1 and exec command uses AWS CLI v2
   ansible.builtin.shell: |
     for f in /root/.kube/config /home/ec2-user/.kube/config; do
-      [ -f "$f" ] && sed -i 's/client\.authentication\.k8s\.io\/v1alpha1/client.authentication.k8s.io\/v1beta1/g' "$f" || true
+      [ -f "$f" ] || continue
+      sed -i 's/client\.authentication\.k8s\.io\/v1alpha1/client.authentication.k8s.io\/v1beta1/g' "$f"
+      sed -i 's/command: *aws/command: \/usr\/local\/bin\/aws/g' "$f"
+      sed -i 's/command: *"aws"/command: "\/usr\/local\/bin\/aws"/g' "$f"
     done
   args:
     executable: /bin/bash
@@ -16,12 +19,20 @@
     executable: /bin/bash
     creates: /usr/local/bin/helm
 
+- name: Set env so exec plugin uses AWS CLI v2 and kubeconfig
+  ansible.builtin.set_fact:
+    helm_env:
+      PATH: "/usr/local/bin:/usr/bin:/bin"
+      KUBECONFIG: "/root/.kube/config"
+
 - name: Add EKS Helm repo
   ansible.builtin.shell: /usr/local/bin/helm repo add eks https://aws.github.io/eks-charts
+  environment: "{{ helm_env }}"
   changed_when: true
 
 - name: Update Helm repos
   ansible.builtin.shell: /usr/local/bin/helm repo update
+  environment: "{{ helm_env }}"
   changed_when: true
 
 - name: Install AWS Load Balancer Controller
@@ -31,19 +42,23 @@
       --set clusterName={{ cluster_name }} \
       --set serviceAccount.create=false \
       --set serviceAccount.name=aws-load-balancer-controller
+  environment: "{{ helm_env }}"
   changed_when: true
 
 - name: Add Argo Helm repo
   ansible.builtin.shell: /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm
+  environment: "{{ helm_env }}"
   changed_when: true
 
 - name: Update Helm repos (Argo)
   ansible.builtin.shell: /usr/local/bin/helm repo update
+  environment: "{{ helm_env }}"
   changed_when: true
 
 - name: Install ArgoCD
   ansible.builtin.shell: |
     /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
+  environment: "{{ helm_env }}"
   changed_when: true
 
 - name: Copy ArgoCD Application manifest to host
@@ -54,6 +69,7 @@
 
 - name: Apply ArgoCD Application (sync app from Git into cluster)
   ansible.builtin.shell: kubectl apply -f /tmp/argocd-application.yaml
+  environment: "{{ helm_env }}"
   register: argocd_apply
   retries: 5
   delay: 20

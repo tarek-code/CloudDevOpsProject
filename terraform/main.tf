@@ -206,6 +206,18 @@ module "eks" {
     Name = var.eks_cluster_name
   }
 
+  # Allow Jenkins EC2 (and any host with Jenkins SG) to reach EKS API on 443
+  cluster_security_group_additional_rules = {
+    ingress_from_jenkins = {
+      description              = "Allow Jenkins EC2 to reach EKS API"
+      protocol                 = "tcp"
+      from_port                = 443
+      to_port                  = 443
+      type                     = "ingress"
+      source_security_group_id = module.security_group.security_group_id
+    }
+  }
+
   # Fargate requires private subnets
   fargate_profiles = {
     fargate_profile = {

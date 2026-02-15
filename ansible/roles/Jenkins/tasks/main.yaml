@@ -78,8 +78,21 @@
     dest: /usr/local/bin/kubectl
     mode: "0755"
 
+- name: Install AWS CLI v2 (required for EKS exec auth v1beta1; AL2 default is v1 which uses v1alpha1)
+  ansible.builtin.shell: |
+    if ! aws --version 2>/dev/null | grep -q 'aws-cli/2'; then
+      curl -sS "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+      unzip -o -q /tmp/awscliv2.zip -d /tmp
+      /tmp/aws/install -i /usr/local/aws-cli -b /usr/local/bin --update
+      rm -rf /tmp/aws /tmp/awscliv2.zip
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+
 - name: Update kubeconfig
   ansible.builtin.shell: |
+    export PATH="/usr/local/bin:$PATH"
     aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
 
 - name: Fix kubeconfig exec apiVersion (v1alpha1 not supported by Helm/kubectl)
