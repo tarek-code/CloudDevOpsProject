@@ -55,10 +55,12 @@
   environment: "{{ helm_env }}"
   changed_when: true
 
-- name: Install ArgoCD
+- name: Install ArgoCD (can take 5–10 min; --timeout 10m so Helm does not hang)
   ansible.builtin.shell: |
-    /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
+    /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace --timeout 10m --wait
   environment: "{{ helm_env }}"
+  async: 660
+  poll: 30
   changed_when: true
 
 - name: Copy ArgoCD Application manifest to host

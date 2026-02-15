@@ -5,6 +5,8 @@
   hosts: service_jenkins
   gather_facts: false
   become: yes
+  vars:
+    ansible_become_timeout: 120
   tasks:
     - name: Install Python 3.8 and pip (Amazon Linux 2)
       ansible.builtin.raw: |
