@@ -37,5 +37,5 @@
     aws_region: "us-east-1" # same as terraform var aws_region
   roles:
     - role: Jenkins
+    - role: alb-iam   # ALB Controller IAM + ServiceAccount must exist before helm-install installs the controller
     - role: helm-install
-    - role: alb-iam

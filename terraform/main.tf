@@ -247,6 +247,51 @@ module "eks" {
   }
 }
 
+##############################
+# AWS Load Balancer Controller IAM (IRSA) – policy, role, OIDC; Ansible only applies ServiceAccount
+##############################
+data "aws_eks_cluster" "main" {
+  name = module.eks.cluster_name
+}
+
+locals {
+  oidc_issuer      = replace(data.aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")
+  oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.oidc_issuer}"
+}
+
+resource "aws_iam_policy" "alb_controller" {
+  name        = "AWSLoadBalancerControllerIAMPolicy"
+  description = "IAM policy for AWS Load Balancer Controller"
+  policy      = file("${path.module}/alb-controller-iam-policy.json")
+}
+
+resource "aws_iam_role" "alb_controller" {
+  name = "AWSLoadBalancerControllerRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = local.oidc_provider_arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${local.oidc_issuer}:aud" = "sts.amazonaws.com"
+            "${local.oidc_issuer}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "alb_controller" {
+  policy_arn = aws_iam_policy.alb_controller.arn
+  role       = aws_iam_role.alb_controller.name
+}
 
 ##############################
 # 7️⃣ SNS Module

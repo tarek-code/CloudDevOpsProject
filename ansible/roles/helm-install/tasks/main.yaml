@@ -45,13 +45,25 @@
   environment: "{{ helm_env }}"
   changed_when: true
 
-- name: Install ArgoCD into EKS (skip hooks to avoid hook timeout; wait 5 min for workloads)
+- name: Remove ALB webhook so ArgoCD install can create Services (webhook is re-created when ALB Controller is installed)
   ansible.builtin.shell: |
-    /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace --timeout 5m --wait --no-hooks
+    kubectl get mutatingwebhookconfigurations -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | while read name; do
+      case "$name" in
+        *elbv2*|*aws-load-balancer*|*load-balancer-webhook*) kubectl delete mutatingwebhookconfiguration "$name" --ignore-not-found=true ;;
+      esac
+    done
+  environment: "{{ helm_env }}"
+  register: remove_webhook
+  changed_when: remove_webhook.rc == 0
+  failed_when: false
+
+- name: Install ArgoCD into EKS (skip hooks to avoid hook timeout; wait up to 15m for workloads on Fargate)
+  ansible.builtin.shell: |
+    /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace --timeout 15m --wait --no-hooks
   environment: "{{ helm_env }}"
   register: argocd_helm
   changed_when: true
-  async: 360
+  async: 960
   poll: 30
   failed_when: argocd_helm.finished and argocd_helm.rc != 0
 
