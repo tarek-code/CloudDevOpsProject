@@ -7,10 +7,13 @@
 pipeline {
     
     environment {
-        IMAGE_TAG   = "${env.BUILD_NUMBER}"
+        IMAGE_TAG    = "${env.BUILD_NUMBER}"
         ECR_REGISTRY = "183631347882.dkr.ecr.us-east-1.amazonaws.com"
-        ECR_IMAGE   = "${ECR_REGISTRY}/ivolve-app"
-        AWS_REGION  = "us-east-1"
+        ECR_IMAGE    = "${ECR_REGISTRY}/ivolve-app"
+        AWS_REGION   = "us-east-1"
+        // GitHub credential ID (username/password) configured by Ansible from Vault; repo URL for push
+        GITHUB_CREDENTIAL_ID = "github-credentials"
+        GITHUB_REPO_URL      = "https://github.com/tarek-code/CloudDevOpsProject.git"
     }
     
     stages {
@@ -88,7 +91,7 @@ pipeline {
                 script {
                     def msg = "CI: update image to ${IMAGE_TAG}"
                     def manifestsDir = env.USE_MANUAL_CLONE == 'true' ? 'Jenkins_App/k8s' : 'k8s'
-                    pushManifests(msg, manifestsDir, null)
+                    pushManifests(msg, manifestsDir, null, env.GITHUB_CREDENTIAL_ID, env.GITHUB_REPO_URL)
                 }
             }
         }

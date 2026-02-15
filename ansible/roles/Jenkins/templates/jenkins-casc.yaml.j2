@@ -1,0 +1,28 @@
+# Jenkins Configuration as Code - Shared Library + optional GitHub credential
+# Deployed by Ansible; loaded via CASC_JENKINS_CONFIG
+# GitHub credential: pass jenkins_github_username and jenkins_github_token via -e or vault; Ansible injects into Jenkins
+unclassified:
+  globalLibraries:
+    libraries:
+      - name: "{{ jenkins_shared_library_name }}"
+        defaultVersion: "{{ jenkins_shared_library_version }}"
+        retriever:
+          modernSCM:
+            scm:
+              git:
+                remote: "{{ jenkins_shared_library_repo }}"
+                traits:
+                  - branchDiscoveryTrait
+                # Library root = Shared-Library subfolder in repo (Jenkins loads vars/ from there)
+                libraryPath: "Shared-Library"
+{% if jenkins_github_username is defined and jenkins_github_username | length > 0 and jenkins_github_token is defined and jenkins_github_token | length > 0 %}
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              id: "{{ jenkins_github_credential_id }}"
+              username: "{{ jenkins_github_username }}"
+              password: "{{ jenkins_github_token }}"
+              scope: GLOBAL
+{% endif %}

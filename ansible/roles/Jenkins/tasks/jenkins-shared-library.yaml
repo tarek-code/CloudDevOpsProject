@@ -1,0 +1,51 @@
+---
+# Configure Jenkins Shared Library via Configuration as Code (JCasC)
+# Runs after Jenkins is installed and started
+
+- name: Ensure Jenkins plugins directory exists
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}/plugins"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: "0755"
+
+- name: Download Configuration as Code plugin
+  ansible.builtin.get_url:
+    url: "https://updates.jenkins.io/latest/configuration-as-code.hpi"
+    dest: "{{ jenkins_home }}/plugins/configuration-as-code.jpi"
+    owner: jenkins
+    group: jenkins
+    mode: "0644"
+  register: jcasc_plugin_download
+  changed_when: jcasc_plugin_download.changed
+
+- name: Deploy JCasC config for Shared Library
+  ansible.builtin.template:
+    src: jenkins-casc.yaml.j2
+    dest: "{{ jenkins_home }}/casc.yaml"
+    owner: jenkins
+    group: jenkins
+    mode: "0644"
+
+- name: Set CASC_JENKINS_CONFIG in Jenkins sysconfig (replace if present)
+  ansible.builtin.lineinfile:
+    path: "{{ jenkins_sysconfig }}"
+    regexp: "^#?CASC_JENKINS_CONFIG="
+    line: "CASC_JENKINS_CONFIG={{ jenkins_home }}/casc.yaml"
+  register: casc_line_updated
+  notify: Restart Jenkins
+
+- name: Append CASC_JENKINS_CONFIG if not in file
+  ansible.builtin.lineinfile:
+    path: "{{ jenkins_sysconfig }}"
+    line: "CASC_JENKINS_CONFIG={{ jenkins_home }}/casc.yaml"
+    insertafter: EOF
+  when: "'CASC_JENKINS_CONFIG' not in (lookup('file', jenkins_sysconfig) | default(''))"
+  notify: Restart Jenkins
+
+- name: Restart Jenkins to load JCasC and Shared Library config
+  ansible.builtin.service:
+    name: jenkins
+    state: restarted
+  when: jcasc_plugin_download.changed | default(false)

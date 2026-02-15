@@ -70,3 +70,6 @@
 - name: Update kubeconfig
   ansible.builtin.shell: |
     aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+
+- name: Configure Jenkins Shared Library (JCasC)
+  ansible.builtin.include_tasks: jenkins-shared-library.yaml

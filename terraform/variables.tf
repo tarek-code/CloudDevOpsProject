@@ -186,6 +186,15 @@ variable "sg_ingress_protocol" {
 }
 
 # -----------------------------------------------------------------------------
+# ECR
+# -----------------------------------------------------------------------------
+variable "ecr_repository_name" {
+  type        = string
+  description = "ECR repository name for the application image (Jenkins pushes here)"
+  default     = "ivolve-app"
+}
+
+# -----------------------------------------------------------------------------
 # EKS
 # -----------------------------------------------------------------------------
 variable "eks_cluster_name" {

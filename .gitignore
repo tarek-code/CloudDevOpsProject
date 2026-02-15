@@ -1,3 +1,33 @@
+# Terraform
 *.tfvars
-.terraform
+.terraform/
 .terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.*.tfstate
+override.tf
+override.tf.json
+*.tfplan
+
+# Ansible
+group_vars/all/vault.yml
+.vault_pass
+vault_pass.txt
+*.retry
+
+# Python / local
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

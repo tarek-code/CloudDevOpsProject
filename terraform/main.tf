@@ -84,7 +84,83 @@ data "aws_ami" "amazon_linux" {
   }
 }
 ##############################
-# 4️⃣ Jenkins EC2 Module
+# 4️⃣ IAM role for Jenkins EC2 (ECR push + EKS describe)
+##############################
+data "aws_caller_identity" "current" {}
+
+resource "aws_iam_role" "jenkins_ec2" {
+  name = "${var.project_name}-jenkins-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "jenkins_ecr_eks" {
+  name = "${var.project_name}-jenkins-ecr-eks"
+  role = aws_iam_role.jenkins_ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECRLoginAndPush"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECRRepository"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload"
+        ]
+        Resource = "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/*"
+      },
+      {
+        Sid    = "EKSDescribe"
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster"
+        ]
+        Resource = "arn:aws:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "jenkins_ec2" {
+  name = "${var.project_name}-jenkins-ec2-profile"
+  role = aws_iam_role.jenkins_ec2.name
+}
+
+##############################
+# ECR repository for app image (Jenkins pushes here)
+##############################
+resource "aws_ecr_repository" "app" {
+  name                 = var.ecr_repository_name
+  image_tag_mutability = "MUTABLE"
+}
+
+##############################
+# 5️⃣ Jenkins EC2 Module
 ##############################
 module "jenkins_ec2" {
   source                      = "terraform-aws-modules/ec2-instance/aws"
@@ -96,13 +172,14 @@ module "jenkins_ec2" {
   associate_public_ip_address = var.jenkins_associate_public_ip
   vpc_security_group_ids      = [module.security_group.security_group_id]
   key_name                    = var.jenkins_key_name
+  iam_instance_profile        = aws_iam_instance_profile.jenkins_ec2.name
   tags = {
     service = var.jenkins_ansible_tag
   }
 }
 
 ##############################
-# 5️⃣ EKS Module
+# 6️⃣ EKS Module
 ##############################
 module "eks" {
   source                 = "terraform-aws-modules/eks/aws"
@@ -120,7 +197,7 @@ module "eks" {
     fargate_profile = {
       name       = "${var.project_name}-fargate-profile"
       subnet_ids = module.vpc.public_subnets
-      selectors  = [{ namespace = "kube-system" }, { namespace = "default" }]
+      selectors  = [{ namespace = "kube-system" }, { namespace = "default" }, { namespace = "ivolve" }]
       tags = {
         Name = "${var.project_name}-fargate-profile"
       }
@@ -130,7 +207,7 @@ module "eks" {
 
 
 ##############################
-# 6️⃣ SNS Module
+# 7️⃣ SNS Module
 ##############################
 
 module "sns_alerts" {
@@ -148,7 +225,7 @@ module "sns_alerts" {
 }
 
 ##############################
-# 7️⃣ CloudWatch Module
+# 8️⃣ CloudWatch Module
 ##############################
 resource "aws_cloudwatch_metric_alarm" "jenkins_cpu" {
   alarm_name          = var.cloudwatch_alarm_name

@@ -1,0 +1,13 @@
+# Optional: use this only if you prefer vault over passing -e on the command line.
+# DO NOT put real credentials in this file (it may be committed). Copy to vault.yml, edit, then encrypt.
+#
+# Easiest: let Ansible pass username/token to Jenkins with one command (no file needed):
+#   ansible-playbook -i ansible/inventory/aws-ec2.yaml ansible/main.yaml \
+#     -e jenkins_github_username=YOUR_USER -e jenkins_github_token=YOUR_PAT
+#
+# With vault: cp vault.yml.example vault.yml, put real values in vault.yml, then:
+#   ansible-vault encrypt ansible/group_vars/all/vault.yml
+#   ansible-playbook ... --ask-vault-pass
+---
+jenkins_github_username: "your-github-username"
+jenkins_github_token: "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

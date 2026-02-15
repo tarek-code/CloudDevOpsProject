@@ -1,0 +1,12 @@
+---
+# Shared Library configured via JCasC (Ansible)
+jenkins_shared_library_name: "ivolve-shared-library"
+jenkins_shared_library_version: "main"
+jenkins_shared_library_repo: "https://github.com/tarek-code/CloudDevOpsProject.git"
+
+# Paths (Amazon Linux 2 / RHEL Jenkins package)
+jenkins_home: "/var/lib/jenkins"
+jenkins_sysconfig: "/etc/sysconfig/jenkins"
+
+# GitHub credential in Jenkins (ID used in pipeline). Set username/token in vault.
+jenkins_github_credential_id: "github-credentials"
