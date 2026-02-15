@@ -41,6 +41,33 @@ variable "project_name" {
 }
 
 # -----------------------------------------------------------------------------
+# Module versions (registry versions for terraform-aws-modules)
+# -----------------------------------------------------------------------------
+variable "vpc_module_version" {
+  type        = string
+  description = "Terraform registry version of terraform-aws-modules/vpc/aws"
+  default     = "5.1.0"
+}
+
+variable "security_group_module_version" {
+  type        = string
+  description = "Terraform registry version of terraform-aws-modules/security-group/aws"
+  default     = "5.1.0"
+}
+
+variable "ec2_instance_module_version" {
+  type        = string
+  description = "Terraform registry version of terraform-aws-modules/ec2-instance/aws"
+  default     = "5.1.0"
+}
+
+variable "eks_module_version" {
+  type        = string
+  description = "Terraform registry version of terraform-aws-modules/eks/aws"
+  default     = "20.1.0"
+}
+
+# -----------------------------------------------------------------------------
 # VPC
 # -----------------------------------------------------------------------------
 variable "vpc_cidr" {
@@ -59,6 +86,36 @@ variable "vpc_public_subnet_cidrs" {
   type        = list(string)
   description = "CIDR blocks for public subnets (one per AZ)"
   default     = ["10.0.1.0/24", "10.0.2.0/24"]
+}
+
+variable "vpc_enable_nat_gateway" {
+  type        = bool
+  description = "Enable NAT gateway for private subnets"
+  default     = false
+}
+
+variable "vpc_enable_vpn_gateway" {
+  type        = bool
+  description = "Enable VPN gateway"
+  default     = false
+}
+
+variable "vpc_enable_dns_hostnames" {
+  type        = bool
+  description = "Enable DNS hostnames in VPC"
+  default     = true
+}
+
+variable "vpc_enable_internet_gateway" {
+  type        = bool
+  description = "Enable internet gateway"
+  default     = true
+}
+
+variable "nacl_tcp_protocol" {
+  type        = string
+  description = "NACL protocol number for TCP (6)"
+  default     = "6"
 }
 
 # Allowed CIDR for ingress (e.g. 0.0.0.0/0 or your IP)
@@ -131,6 +188,30 @@ variable "jenkins_ansible_tag" {
   default     = "jenkins"
 }
 
+variable "jenkins_associate_public_ip" {
+  type        = bool
+  description = "Associate a public IP address with Jenkins EC2"
+  default     = true
+}
+
+variable "ami_owners" {
+  type        = list(string)
+  description = "AMI owners for data.aws_ami (e.g. amazon)"
+  default     = ["amazon"]
+}
+
+variable "ami_name_filter" {
+  type        = string
+  description = "AMI name filter for Amazon Linux 2"
+  default     = "amzn2-ami-hvm-*-x86_64-gp2"
+}
+
+variable "sg_ingress_protocol" {
+  type        = string
+  description = "Security group ingress protocol (tcp/udp/icmp)"
+  default     = "tcp"
+}
+
 # -----------------------------------------------------------------------------
 # EKS
 # -----------------------------------------------------------------------------
@@ -149,6 +230,12 @@ variable "eks_cluster_version" {
 # -----------------------------------------------------------------------------
 # SNS / Alerts
 # -----------------------------------------------------------------------------
+variable "sns_module_version" {
+  type        = string
+  description = "Terraform registry version of terraform-aws-modules/sns/aws"
+  default     = "6.2.1"
+}
+
 variable "sns_alert_topic_name" {
   type        = string
   description = "SNS topic name for alerts"
@@ -158,6 +245,12 @@ variable "sns_alert_topic_name" {
 variable "sns_alert_email" {
   type        = string
   description = "Email address for SNS alert subscription"
+}
+
+variable "sns_subscription_protocol" {
+  type        = string
+  description = "SNS subscription protocol (e.g. email, sms)"
+  default     = "email"
 }
 
 # -----------------------------------------------------------------------------
@@ -191,4 +284,28 @@ variable "cloudwatch_alarm_description" {
   type        = string
   description = "Description for the CloudWatch alarm"
   default     = "CPU > 70% for Jenkins EC2"
+}
+
+variable "cloudwatch_alarm_comparison_operator" {
+  type        = string
+  description = "CloudWatch alarm comparison operator"
+  default     = "GreaterThanThreshold"
+}
+
+variable "cloudwatch_alarm_metric_name" {
+  type        = string
+  description = "CloudWatch metric name"
+  default     = "CPUUtilization"
+}
+
+variable "cloudwatch_alarm_namespace" {
+  type        = string
+  description = "CloudWatch metric namespace"
+  default     = "AWS/EC2"
+}
+
+variable "cloudwatch_alarm_statistic" {
+  type        = string
+  description = "CloudWatch alarm statistic"
+  default     = "Average"
 }

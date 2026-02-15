@@ -3,20 +3,20 @@
 ##############################
 module "vpc" {
   source                  = "terraform-aws-modules/vpc/aws"
-  version                 = "5.1.0"
+  version                 = var.vpc_module_version
   name                    = "${var.project_name}-vpc"
   cidr                    = var.vpc_cidr
   azs                     = var.vpc_azs
   public_subnets          = var.vpc_public_subnet_cidrs
-  enable_nat_gateway      = false
-  enable_vpn_gateway      = false
-  enable_dns_hostnames    = true
-  enable_internet_gateway = true
+  enable_nat_gateway      = var.vpc_enable_nat_gateway
+  enable_vpn_gateway      = var.vpc_enable_vpn_gateway
+  enable_dns_hostnames    = var.vpc_enable_dns_hostnames
+  enable_internet_gateway = var.vpc_enable_internet_gateway
 
   public_inbound_acl_rules = [
-    { rule_number = 100, rule_action = "allow", from_port = var.ssh_port, to_port = var.ssh_port, protocol = "6", cidr_block = var.allowed_cidr },
-    { rule_number = 110, rule_action = "allow", from_port = var.jenkins_port, to_port = var.jenkins_port, protocol = "6", cidr_block = var.allowed_cidr },
-    { rule_number = 120, rule_action = "allow", from_port = var.https_port, to_port = var.https_port, protocol = "6", cidr_block = var.allowed_cidr },
+    { rule_number = 100, rule_action = "allow", from_port = var.ssh_port, to_port = var.ssh_port, protocol = var.nacl_tcp_protocol, cidr_block = var.allowed_cidr },
+    { rule_number = 110, rule_action = "allow", from_port = var.jenkins_port, to_port = var.jenkins_port, protocol = var.nacl_tcp_protocol, cidr_block = var.allowed_cidr },
+    { rule_number = 120, rule_action = "allow", from_port = var.https_port, to_port = var.https_port, protocol = var.nacl_tcp_protocol, cidr_block = var.allowed_cidr },
   ]
   public_outbound_acl_rules = [
     { rule_number = 100, rule_action = "allow", from_port = var.egress_from_port, to_port = var.egress_to_port, protocol = var.egress_protocol, cidr_block = var.egress_cidr }
@@ -33,7 +33,7 @@ module "vpc" {
 ##############################
 module "security_group" {
   source  = "terraform-aws-modules/security-group/aws"
-  version = "5.1.0"
+  version = var.security_group_module_version
   name    = "${var.project_name}-jenkins-security-group"
   vpc_id  = module.vpc.vpc_id
 
@@ -41,14 +41,14 @@ module "security_group" {
     {
       from_port   = var.jenkins_port
       to_port     = var.jenkins_port
-      protocol    = "tcp"
+      protocol    = var.sg_ingress_protocol
       cidr_blocks = [var.allowed_cidr]
       description = "Allow Jenkins from any IP"
     },
     {
       from_port   = var.ssh_port
       to_port     = var.ssh_port
-      protocol    = "tcp"
+      protocol    = var.sg_ingress_protocol
       cidr_blocks = [var.allowed_cidr]
       description = "Allow SSH from any IP"
     }
@@ -75,11 +75,11 @@ module "security_group" {
 ##############################
 data "aws_ami" "amazon_linux" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = var.ami_owners
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = [var.ami_name_filter]
   }
 }
 ##############################
@@ -87,12 +87,12 @@ data "aws_ami" "amazon_linux" {
 ##############################
 module "jenkins-ec2" {
   source                      = "terraform-aws-modules/ec2-instance/aws"
-  version                     = "5.1.0"
+  version                     = var.ec2_instance_module_version
   name                        = "${var.project_name}-jenkins-ec2"
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.jenkins_instance_type
   subnet_id                   = module.vpc.public_subnets[0]
-  associate_public_ip_address = true
+  associate_public_ip_address = var.jenkins_associate_public_ip
   vpc_security_group_ids      = [module.security_group.security_group_id]
   key_name                    = var.jenkins_key_name
   tags = {
@@ -105,7 +105,7 @@ module "jenkins-ec2" {
 ##############################
 module "eks" {
   source          = "terraform-aws-modules/eks/aws"
-  version         = "20.1.0"
+  version         = var.eks_module_version
   cluster_name    = var.eks_cluster_name
   cluster_version = var.eks_cluster_version
   vpc_id          = module.vpc.vpc_id
@@ -132,13 +132,13 @@ module "eks" {
 
 module "sns_alerts" {
   source  = "terraform-aws-modules/sns/aws"
-  version = "4.0.0"
+  version = var.sns_module_version
 
   name = var.sns_alert_topic_name
 
   subscriptions = {
     email_alert = {
-      protocol = "email"
+      protocol = var.sns_subscription_protocol
       endpoint = var.sns_alert_email
     }
   }
@@ -149,15 +149,15 @@ module "sns_alerts" {
 ##############################
 resource "aws_cloudwatch_metric_alarm" "jenkins_cpu" {
   alarm_name          = var.cloudwatch_alarm_name
-  comparison_operator = "GreaterThanThreshold"
+  comparison_operator = var.cloudwatch_alarm_comparison_operator
   evaluation_periods  = var.cloudwatch_alarm_evaluation_periods
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
+  metric_name         = var.cloudwatch_alarm_metric_name
+  namespace           = var.cloudwatch_alarm_namespace
   period              = var.cloudwatch_alarm_period
-  statistic           = "Average"
+  statistic           = var.cloudwatch_alarm_statistic
   threshold           = var.cloudwatch_alarm_threshold
   alarm_description   = var.cloudwatch_alarm_description
-  alarm_actions       = [module.sns_alerts.sns_topic_arn]
+  alarm_actions       = [module.sns_alerts.topic_arn]
   dimensions = {
     InstanceId = module["jenkins-ec2"].id
   }

@@ -14,11 +14,24 @@ aws_account_id = "YOUR_AWS_ACCOUNT_ID"
 project_name = "ivolve"
 
 # -----------------------------------------------------------------------------
+# Module versions
+# -----------------------------------------------------------------------------
+vpc_module_version            = "5.1.0"
+security_group_module_version = "5.1.0"
+ec2_instance_module_version   = "5.1.0"
+eks_module_version            = "20.1.0"
+
+# -----------------------------------------------------------------------------
 # VPC
 # -----------------------------------------------------------------------------
-vpc_cidr                = "10.0.0.0/16"
-vpc_azs                 = ["us-east-1a", "us-east-1b"]
-vpc_public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
+vpc_cidr                   = "10.0.0.0/16"
+vpc_azs                    = ["us-east-1a", "us-east-1b"]
+vpc_public_subnet_cidrs     = ["10.0.1.0/24", "10.0.2.0/24"]
+vpc_enable_nat_gateway      = false
+vpc_enable_vpn_gateway      = false
+vpc_enable_dns_hostnames    = true
+vpc_enable_internet_gateway = true
+nacl_tcp_protocol           = "6"
 
 allowed_cidr      = "0.0.0.0/0"
 ssh_port          = 22
@@ -32,9 +45,13 @@ egress_cidr       = "0.0.0.0/0"
 # -----------------------------------------------------------------------------
 # Jenkins EC2
 # -----------------------------------------------------------------------------
-jenkins_instance_type = "t3.medium"
-jenkins_key_name      = "jenkins_key"  # Must exist in AWS in this region
-jenkins_ansible_tag   = "jenkins"
+jenkins_instance_type       = "t3.medium"
+jenkins_key_name            = "jenkins_key"  # Must exist in AWS in this region
+jenkins_ansible_tag         = "jenkins"
+jenkins_associate_public_ip = true
+ami_owners                  = ["amazon"]
+ami_name_filter             = "amzn2-ami-hvm-*-x86_64-gp2"
+sg_ingress_protocol         = "tcp"
 
 # -----------------------------------------------------------------------------
 # EKS
@@ -45,14 +62,20 @@ eks_cluster_version = "1.27"
 # -----------------------------------------------------------------------------
 # SNS / Alerts
 # -----------------------------------------------------------------------------
-sns_alert_topic_name = "jenkins-alerts-topic"
-sns_alert_email      = "your-email@example.com"
+sns_module_version        = "6.2.1"
+sns_alert_topic_name      = "jenkins-alerts-topic"
+sns_alert_email           = "your-email@example.com"
+sns_subscription_protocol  = "email"
 
 # -----------------------------------------------------------------------------
 # CloudWatch Alarm
 # -----------------------------------------------------------------------------
-cloudwatch_alarm_name              = "jenkins-ec2-high-cpu"
-cloudwatch_alarm_threshold         = 70
+cloudwatch_alarm_name               = "jenkins-ec2-high-cpu"
+cloudwatch_alarm_threshold          = 70
 cloudwatch_alarm_evaluation_periods = 2
-cloudwatch_alarm_period            = 300
-cloudwatch_alarm_description       = "CPU > 70% for Jenkins EC2"
+cloudwatch_alarm_period             = 300
+cloudwatch_alarm_description        = "CPU > 70% for Jenkins EC2"
+cloudwatch_alarm_comparison_operator = "GreaterThanThreshold"
+cloudwatch_alarm_metric_name        = "CPUUtilization"
+cloudwatch_alarm_namespace          = "AWS/EC2"
+cloudwatch_alarm_statistic          = "Average"
