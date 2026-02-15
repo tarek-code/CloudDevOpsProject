@@ -39,3 +39,12 @@
     chart_ref: argo/argo-cd
     release_namespace: argocd
     create_namespace: true
+
+- name: Apply ArgoCD Application (sync app from Git into cluster)
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('file', playbook_dir + '/../argocd/application.yaml') | from_yaml }}"
+  register: argocd_app_result
+  retries: 5
+  delay: 20
+  until: argocd_app_result is succeeded
