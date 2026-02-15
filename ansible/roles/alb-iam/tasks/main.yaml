@@ -19,7 +19,13 @@
     cluster_name: "{{ cluster_name }}"
     state: present
 
-- name: Create Kubernetes ServiceAccount for ALB Controller
-  kubernetes.core.k8s:
-    state: present
-    definition: "{{ lookup('template', role_path + '/templates/serviceaccount.yaml.j2') }}"
+- name: Create Kubernetes ServiceAccount manifest for ALB Controller
+  ansible.builtin.template:
+    src: serviceaccount.yaml.j2
+    dest: /tmp/alb-serviceaccount.yaml
+    mode: "0644"
+
+- name: Apply ServiceAccount to cluster
+  ansible.builtin.shell: kubectl apply -f /tmp/alb-serviceaccount.yaml
+  register: sa_apply
+  changed_when: true

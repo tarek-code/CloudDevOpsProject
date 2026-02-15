@@ -54,7 +54,7 @@ Graduation project: CI/CD with Jenkins, ArgoCD, Kubernetes (EKS), Terraform (AWS
 ### Prerequisites
 
 - AWS account; AWS CLI configured (or Terraform Cloud with AWS credentials).
-- For Ansible: `ansible-core`, `boto3`, `botocore`; `pip install ansible boto3`.
+- For Ansible: `ansible-core`, `boto3`, `botocore`; `pip install ansible boto3`. Then install the AWS collection for dynamic inventory and alb-iam role: `ansible-galaxy collection install -r ansible/requirements.yml`.
 - For Terraform: Terraform 1.x; HCP Terraform (Terraform Cloud) account for state.
 - EC2 key pair in AWS (e.g. `jenkins_key`) in the same region as Terraform.
 

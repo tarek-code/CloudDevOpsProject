@@ -6,45 +6,45 @@
     creates: /usr/local/bin/helm
 
 - name: Add EKS Helm repo
-  community.kubernetes.helm_repository:
-    name: eks
-    repo_url: https://aws.github.io/eks-charts
+  ansible.builtin.shell: helm repo add eks https://aws.github.io/eks-charts
+  changed_when: true
 
 - name: Update Helm repos
-  community.kubernetes.helm_repository:
-    name: eks
-    repo_url: https://aws.github.io/eks-charts
-    update_cache: yes
+  ansible.builtin.shell: helm repo update
+  changed_when: true
 
 - name: Install AWS Load Balancer Controller
-  community.kubernetes.helm:
-    name: aws-load-balancer-controller
-    chart_ref: eks/aws-load-balancer-controller
-    release_namespace: kube-system
-    create_namespace: false
-    values:
-      clusterName: "{{ cluster_name }}"
-      serviceAccount:
-        create: false
-        name: aws-load-balancer-controller
+  ansible.builtin.shell: |
+    helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+      -n kube-system \
+      --set clusterName={{ cluster_name }} \
+      --set serviceAccount.create=false \
+      --set serviceAccount.name=aws-load-balancer-controller
+  changed_when: true
 
 - name: Add Argo Helm repo
-  community.kubernetes.helm_repository:
-    name: argo
-    repo_url: https://argoproj.github.io/argo-helm
+  ansible.builtin.shell: helm repo add argo https://argoproj.github.io/argo-helm
+  changed_when: true
+
+- name: Update Helm repos (Argo)
+  ansible.builtin.shell: helm repo update
+  changed_when: true
 
 - name: Install ArgoCD
-  community.kubernetes.helm:
-    name: argocd
-    chart_ref: argo/argo-cd
-    release_namespace: argocd
-    create_namespace: true
+  ansible.builtin.shell: |
+    helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
+  changed_when: true
+
+- name: Copy ArgoCD Application manifest to host
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../argocd/application.yaml"
+    dest: /tmp/argocd-application.yaml
+    mode: "0644"
 
 - name: Apply ArgoCD Application (sync app from Git into cluster)
-  kubernetes.core.k8s:
-    state: present
-    definition: "{{ lookup('file', playbook_dir + '/../argocd/application.yaml') | from_yaml }}"
-  register: argocd_app_result
+  ansible.builtin.shell: kubectl apply -f /tmp/argocd-application.yaml
+  register: argocd_apply
   retries: 5
   delay: 20
-  until: argocd_app_result is succeeded
+  until: argocd_apply.rc == 0
+  changed_when: true
