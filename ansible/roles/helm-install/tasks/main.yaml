@@ -63,18 +63,24 @@
     dest: /tmp/argocd-fargate-values.yaml
     mode: "0644"
 
-- name: Wait for argocd namespace to be gone (if Terminating, Helm cannot create resources)
+- name: Wait for argocd namespace to be gone only if it is Terminating
   ansible.builtin.shell: |
-    for i in $(seq 1 24); do
-      if ! kubectl get namespace argocd 2>/dev/null; then
-        echo "Namespace argocd is gone"
-        exit 0
-      fi
-      echo "Waiting for namespace argocd to terminate... ($i/24)"
-      sleep 10
-    done
-    echo "Timeout: namespace still exists or terminating"
-    exit 1
+    status="$(kubectl get namespace argocd -o jsonpath='{.status.phase}' 2>/dev/null || echo 'NotFound')"
+    if [ "$status" = "Terminating" ]; then
+      for i in $(seq 1 24); do
+        if ! kubectl get namespace argocd 2>/dev/null; then
+          echo "Namespace argocd is gone"
+          exit 0
+        fi
+        echo "Waiting for namespace argocd to terminate... ($i/24)"
+        sleep 10
+      done
+      echo "Timeout: namespace still exists or terminating"
+      exit 1
+    else
+      echo "Namespace argocd status is '$status' (not Terminating); skip wait."
+      exit 0
+    fi
   environment: "{{ helm_env }}"
   register: argocd_ns_wait
   changed_when: false
@@ -110,13 +116,14 @@
   changed_when: false
   failed_when: argocd_verify.rc != 0
 
-- name: Wait for ArgoCD application-controller StatefulSet to be ready
+- name: Wait for all ArgoCD pods to be Ready (covers application-controller StatefulSet and all controllers)
   ansible.builtin.shell: |
-    kubectl wait --for=condition=ready --timeout=300s statefulset argocd-application-controller -n argocd
+    kubectl wait --for=condition=ready --timeout=300s pod \
+      -l app.kubernetes.io/part-of=argocd -n argocd
   environment: "{{ helm_env }}"
-  register: argocd_sts_verify
+  register: argocd_pods_verify
   changed_when: false
-  failed_when: argocd_sts_verify.rc != 0
+  failed_when: argocd_pods_verify.rc != 0
 
 - name: Show ArgoCD pods status
   ansible.builtin.shell: kubectl get pods -n argocd

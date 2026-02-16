@@ -58,6 +58,43 @@ Graduation project: CI/CD with Jenkins, ArgoCD, Kubernetes (EKS), Terraform (AWS
 - For Terraform: Terraform 1.x; HCP Terraform (Terraform Cloud) account for state.
 - EC2 key pair in AWS (e.g. `jenkins_key`) in the same region as Terraform.
 
+#### Using the EC2 key pair from WSL
+
+- **1. Point Terraform to your key pair**
+  - In `terraform/terraform.tfvars`, set:
+    ```hcl
+    jenkins_key_name = "YOUR_KEYPAIR_NAME"
+    ```
+  - Run from `terraform/`:
+    ```bash
+    terraform apply
+    ```
+
+- **2. Copy the `.pem` into WSL and fix permissions**
+  - If the key was downloaded in Windows (for example to `C:\Users\<YourUser>\Downloads\my-jenkins-key.pem`), in WSL run:
+    ```bash
+    mkdir -p ~/.ssh
+    cp /mnt/c/Users/<YourUser>/Downloads/my-jenkins-key.pem ~/.ssh/
+    chmod 600 ~/.ssh/my-jenkins-key.pem
+    ```
+
+- **3. SSH to Jenkins EC2 from WSL**
+  - Get the Jenkins EC2 public IP from the AWS console.
+  - From WSL:
+    ```bash
+    ssh -i ~/.ssh/my-jenkins-key.pem ec2-user@<JENKINS_PUBLIC_IP>
+    ```
+
+- **4. Use the key with Ansible from WSL**
+  - Export once per shell:
+    ```bash
+    export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/my-jenkins-key.pem
+    ```
+  - Then run the playbook (from repo root or `ansible/`):
+    ```bash
+    ansible-playbook -i ansible/inventory/ec2.aws_ec2.yaml ansible/main.yaml
+    ```
+
 ### 1. Terraform (Infrastructure)
 
 - In HCP Terraform workspace, set env vars: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (sensitive).

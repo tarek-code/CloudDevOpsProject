@@ -247,21 +247,17 @@ module "eks" {
   }
 }
 
-##############################
-# AWS Load Balancer Controller IAM (IRSA) – policy, role, OIDC; Ansible only applies ServiceAccount
-##############################
-data "aws_eks_cluster" "main" {
-  name = module.eks.cluster_name
-}
-
 locals {
-  oidc_issuer       = replace(data.aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")
+  oidc_issuer       = replace(module.eks.cluster_oidc_issuer_url, "https://", "")
   oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.oidc_issuer}"
 }
 
-# Required for IRSA (ALB controller, etc.). EKS console "OIDC identity providers" will show 1 after apply.
+# AWS Load Balancer Controller IAM (IRSA) – policy, role, OIDC; Ansible only applies ServiceAccount.
+# Uses EKS module outputs instead of a separate aws_eks_cluster data source so a single apply works on a fresh account.
+# EKS must still be created in the same apply (module.eks above).
+# EKS console "OIDC identity providers" will show 1 after apply.
 resource "aws_iam_openid_connect_provider" "eks" {
-  url             = data.aws_eks_cluster.main.identity[0].oidc[0].issuer
+  url             = module.eks.cluster_oidc_issuer_url
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]
 }
