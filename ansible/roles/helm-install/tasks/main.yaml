@@ -57,19 +57,17 @@
   changed_when: remove_webhook.rc == 0
   failed_when: false
 
-- name: Install ArgoCD into EKS (skip hooks to avoid hook timeout; wait up to 15m for workloads on Fargate)
+- name: Install ArgoCD into EKS (no --wait; Fargate is slow; we wait for deployments in next task)
   ansible.builtin.shell: |
-    /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace --timeout 15m --wait --no-hooks
+    /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace --timeout 3m --no-hooks
   environment: "{{ helm_env }}"
   register: argocd_helm
   changed_when: true
-  async: 960
-  poll: 30
-  failed_when: argocd_helm.finished and argocd_helm.rc != 0
+  failed_when: argocd_helm.rc != 0
 
-- name: Verify ArgoCD deployments are ready in EKS
+- name: Wait for ArgoCD deployments to be ready (Fargate can take 10–15 min)
   ansible.builtin.shell: |
-    kubectl wait --for=condition=available --timeout=120s deployment --all -n argocd
+    kubectl wait --for=condition=available --timeout=900s deployment --all -n argocd
   environment: "{{ helm_env }}"
   register: argocd_verify
   changed_when: false

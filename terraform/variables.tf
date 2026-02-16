@@ -218,7 +218,7 @@ variable "eks_cluster_name" {
 variable "eks_cluster_version" {
   type        = string
   description = "Kubernetes version for EKS (1.29+ required if module enables EKS Auto Mode)"
-  default     = "1.29"
+  default     = "1.30"
 }
 
 # -----------------------------------------------------------------------------
