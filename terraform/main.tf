@@ -28,11 +28,11 @@ module "vpc" {
   ]
 
   public_subnet_tags = {
-    "kubernetes.io/role/elb"                      = "1"
+    "kubernetes.io/role/elb"                        = "1"
     "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
   }
   private_subnet_tags = {
-    "kubernetes.io/role/internal-elb"            = "1"
+    "kubernetes.io/role/internal-elb"               = "1"
     "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
   }
 
@@ -221,11 +221,11 @@ module "eks" {
   # Grant Jenkins EC2 IAM role access to the cluster (for Helm/kubectl from Ansible and pipelines)
   access_entries = {
     jenkins_ec2 = {
-      principal_arn     = aws_iam_role.jenkins_ec2.arn
-      type              = "STANDARD"
+      principal_arn = aws_iam_role.jenkins_ec2.arn
+      type          = "STANDARD"
       policy_associations = {
         cluster_admin = {
-          policy_arn  = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
           access_scope = {
             type = "cluster"
           }
@@ -239,7 +239,7 @@ module "eks" {
     fargate_profile = {
       name       = "${var.project_name}-fargate-profile"
       subnet_ids = module.vpc.private_subnets
-      selectors  = [{ namespace = "kube-system" }, { namespace = "default" }, { namespace = "ivolve" }]
+      selectors  = [{ namespace = "kube-system" }, { namespace = "default" }, { namespace = "ivolve" }, { namespace = "argocd" }]
       tags = {
         Name = "${var.project_name}-fargate-profile"
       }
@@ -255,8 +255,15 @@ data "aws_eks_cluster" "main" {
 }
 
 locals {
-  oidc_issuer      = replace(data.aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")
+  oidc_issuer       = replace(data.aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")
   oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.oidc_issuer}"
+}
+
+# Required for IRSA (ALB controller, etc.). EKS console "OIDC identity providers" will show 1 after apply.
+resource "aws_iam_openid_connect_provider" "eks" {
+  url             = data.aws_eks_cluster.main.identity[0].oidc[0].issuer
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]
 }
 
 resource "aws_iam_policy" "alb_controller" {

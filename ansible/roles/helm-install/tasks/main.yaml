@@ -65,9 +65,18 @@
   changed_when: true
   failed_when: argocd_helm.rc != 0
 
-- name: Wait for ArgoCD deployments to be ready (Fargate can take 10–15 min)
+- name: Show ArgoCD pod status before wait (diagnostic if wait fails)
   ansible.builtin.shell: |
-    kubectl wait --for=condition=available --timeout=900s deployment --all -n argocd
+    echo "=== Pods in argocd ==="
+    kubectl get pods -n argocd -o wide 2>/dev/null || true
+    echo "=== Recent events in argocd ==="
+    kubectl get events -n argocd --sort-by='.lastTimestamp' 2>/dev/null | tail -20 || true
+  environment: "{{ helm_env }}"
+  changed_when: false
+
+- name: Wait for ArgoCD deployments to be ready (max 5 min; if Pending, add argocd to Fargate profile and re-run)
+  ansible.builtin.shell: |
+    kubectl wait --for=condition=available --timeout=300s deployment --all -n argocd
   environment: "{{ helm_env }}"
   register: argocd_verify
   changed_when: false
