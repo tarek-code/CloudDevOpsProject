@@ -1,0 +1,91 @@
+// Groovy init script to configure:
+// - Global Pipeline Library (ivolve-shared-library)
+// - GitHub username/password credentials (optional)
+//
+// Deployed by Ansible into $JENKINS_HOME/init.groovy.d/
+
+import jenkins.model.Jenkins
+import jenkins.plugins.git.GitSCMSource
+import jenkins.plugins.git.traits.BranchDiscoveryTrait
+import org.jenkinsci.plugins.workflow.libs.GlobalLibraries
+import org.jenkinsci.plugins.workflow.libs.LibraryConfiguration
+import org.jenkinsci.plugins.workflow.libs.SCMSourceRetriever
+
+import com.cloudbees.plugins.credentials.CredentialsScope
+import com.cloudbees.plugins.credentials.domains.Domain
+import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl
+import com.cloudbees.plugins.credentials.CredentialsProvider
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials
+
+def j = Jenkins.get()
+
+// -----------------------------------------------------------------------------
+// 1) Ensure GitHub credentials exist (if username/token are provided)
+// -----------------------------------------------------------------------------
+def ghUser = "{{ jenkins_github_username | default('', true) }}"
+def ghToken = "{{ jenkins_github_token | default('', true) }}"
+def ghCredId = "{{ jenkins_github_credential_id }}"
+
+if (ghUser && ghUser.trim() && ghToken && ghToken.trim()) {
+  def credsStore = j.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
+  def domain = Domain.global()
+
+  def existing = CredentialsProvider.lookupCredentials(
+      StandardUsernamePasswordCredentials.class,
+      j,
+      null,
+      null
+  ).find { it.id == ghCredId }
+
+  if (existing != null) {
+    credsStore.removeCredentials(domain, existing)
+  }
+
+  def newCreds = new UsernamePasswordCredentialsImpl(
+      CredentialsScope.GLOBAL,
+      ghCredId,
+      "GitHub credentials for shared library",
+      ghUser,
+      ghToken
+  )
+
+  credsStore.addCredentials(domain, newCreds)
+  j.save()
+}
+
+// -----------------------------------------------------------------------------
+// 2) Configure Global Pipeline Library
+// -----------------------------------------------------------------------------
+def libName = "{{ jenkins_shared_library_name }}"
+def libRepo = "{{ jenkins_shared_library_repo }}"
+def libVersion = "{{ jenkins_shared_library_version }}"
+
+def globalLibs = GlobalLibraries.get()
+def libs = globalLibs.getLibraries() ?: []
+
+def existingLib = libs.find { it.name == libName }
+
+def scmSource = new GitSCMSource(libRepo)
+scmSource.credentialsId = ghCredId
+scmSource.traits = [new BranchDiscoveryTrait()]
+
+def retriever = new SCMSourceRetriever(scmSource)
+def libConfig = new LibraryConfiguration(libName, retriever)
+libConfig.defaultVersion = libVersion
+libConfig.implicit = false
+libConfig.allowVersionOverride = true
+libConfig.includeInChangesets = false
+// Library root = Shared-Library subfolder in repo (Jenkins loads vars/ from there)
+libConfig.libraryPath = "Shared-Library"
+
+if (existingLib != null) {
+  libs.remove(existingLib)
+}
+
+libs.add(libConfig)
+globalLibs.setLibraries(libs)
+globalLibs.save()
+j.save()
+
+println "[init] Configured global library '${libName}' from repo '${libRepo}'"
+

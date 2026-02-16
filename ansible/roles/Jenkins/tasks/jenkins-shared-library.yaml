@@ -1,57 +1,32 @@
 ---
-# Configure Jenkins Shared Library via Configuration as Code (JCasC)
-# Runs after Jenkins is installed and started
+# Configure Jenkins Shared Library, GitHub credentials, and seed pipeline job
+# via Groovy init scripts in $JENKINS_HOME/init.groovy.d.
 
-- name: Ensure Jenkins plugins directory exists
+- name: Ensure Jenkins init.groovy.d directory exists
   ansible.builtin.file:
-    path: "{{ jenkins_home }}/plugins"
+    path: "{{ jenkins_home }}/init.groovy.d"
     state: directory
     owner: jenkins
     group: jenkins
     mode: "0755"
 
-- name: Download Configuration as Code plugin
-  ansible.builtin.get_url:
-    url: "https://updates.jenkins.io/latest/configuration-as-code.hpi"
-    dest: "{{ jenkins_home }}/plugins/configuration-as-code.jpi"
-    owner: jenkins
-    group: jenkins
-    mode: "0644"
-  register: jcasc_plugin_download
-  changed_when: jcasc_plugin_download.changed
-
-- name: Deploy JCasC config for Shared Library
+- name: Deploy Groovy init script to configure Shared Library and GitHub credentials
   ansible.builtin.template:
-    src: jenkins-casc.yaml.j2
-    dest: "{{ jenkins_home }}/casc.yaml"
+    src: global-shared-library.groovy.j2
+    dest: "{{ jenkins_home }}/init.groovy.d/global-shared-library.groovy"
     owner: jenkins
     group: jenkins
     mode: "0644"
 
-# Jenkins 2.335+ uses systemd; set CASC via systemd drop-in (not /etc/sysconfig/jenkins)
-- name: Ensure Jenkins systemd drop-in directory exists
-  ansible.builtin.file:
-    path: /etc/systemd/system/jenkins.service.d
-    state: directory
-    mode: "0755"
-
-- name: Set CASC_JENKINS_CONFIG via systemd override
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/jenkins.service.d/override.conf
-    content: |
-      [Service]
-      Environment="CASC_JENKINS_CONFIG={{ jenkins_home }}/casc.yaml"
+- name: Deploy Groovy init script to create seed pipeline job
+  ansible.builtin.template:
+    src: seed-pipeline-job.groovy.j2
+    dest: "{{ jenkins_home }}/init.groovy.d/seed-pipeline-job.groovy"
+    owner: jenkins
+    group: jenkins
     mode: "0644"
-  register: casc_override_updated
-  notify: Restart Jenkins
 
-- name: Reload systemd after Jenkins override change
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: casc_override_updated.changed
-
-- name: Restart Jenkins to load JCasC and Shared Library config
+- name: Restart Jenkins to load Groovy init script
   ansible.builtin.service:
     name: jenkins
     state: restarted
-  when: jcasc_plugin_download.changed | default(false)
