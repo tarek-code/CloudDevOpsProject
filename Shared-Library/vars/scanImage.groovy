@@ -45,13 +45,16 @@ def call(String imageName) {
                 # Direct download method (works without sudo)
                 if ! command -v trivy >/dev/null 2>&1; then
                     echo "Installing Trivy via direct download to ${installDir}..."
-                    TRIVY_VERSION=\$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/v//')
-                    wget -q https://github.com/aquasecurity/trivy/releases/download/v\${TRIVY_VERSION}/trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz
-                    tar -xzf trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz
+                    # Extract tag_name from GitHub API (works with minified or pretty-printed JSON)
+                    TRIVY_TAG=\$(curl -sL https://api.github.com/repos/aquasecurity/trivy/releases/latest | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\1/p')
+                    if [ -z "\$TRIVY_TAG" ]; then TRIVY_TAG=v0.52.4; fi
+                    TRIVY_VERSION=\${TRIVY_TAG#v}
+                    wget -q "https://github.com/aquasecurity/trivy/releases/download/\${TRIVY_TAG}/trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz" -O trivy.tar.gz
+                    tar -xzf trivy.tar.gz
                     mkdir -p ${installDir}
                     mv trivy ${installDir}/trivy
                     chmod +x ${installDir}/trivy
-                    rm -f trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz
+                    rm -f trivy.tar.gz
                     echo "Trivy installed to ${installDir}/trivy"
                 fi
             """
