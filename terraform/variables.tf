@@ -16,7 +16,7 @@ variable "aws_profile" {
 variable "aws_account_id" {
   type        = string
   description = "AWS account ID"
-  default     = "123456789012"
+  default     = "809275433685"
 }
 
 variable "AWS_ACCESS_KEY_ID" {

@@ -97,6 +97,11 @@
   environment: "{{ helm_env }}"
   changed_when: false
 
+- name: Remove dex-server deployment if present (we disabled Dex; leftover would block wait)
+  ansible.builtin.shell: kubectl delete deployment argocd-dex-server -n argocd --ignore-not-found=true
+  environment: "{{ helm_env }}"
+  changed_when: false
+
 - name: Wait for ArgoCD deployments to be ready (max 5 min; if Pending, add argocd to Fargate profile and re-run)
   ansible.builtin.shell: |
     kubectl wait --for=condition=available --timeout=300s deployment --all -n argocd
@@ -104,6 +109,14 @@
   register: argocd_verify
   changed_when: false
   failed_when: argocd_verify.rc != 0
+
+- name: Wait for ArgoCD application-controller StatefulSet to be ready
+  ansible.builtin.shell: |
+    kubectl wait --for=condition=ready --timeout=300s statefulset argocd-application-controller -n argocd
+  environment: "{{ helm_env }}"
+  register: argocd_sts_verify
+  changed_when: false
+  failed_when: argocd_sts_verify.rc != 0
 
 - name: Show ArgoCD pods status
   ansible.builtin.shell: kubectl get pods -n argocd
