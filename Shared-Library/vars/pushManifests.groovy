@@ -30,6 +30,7 @@ def call(String commitMessage = null, String manifestsDir = 'k8s', String branch
                 def repoHostPath = repoUrl.replaceFirst('^https?://', '')
                 withCredentials([usernamePassword(credentialsId: credentialId, usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh """
+                        # GitHub PATs work in URLs, but ensure token is valid and has 'repo' scope
                         git remote set-url origin "https://\$GIT_USER:\$GIT_PASS@${repoHostPath}"
                         git push origin HEAD:${targetBranch} || true
                     """
