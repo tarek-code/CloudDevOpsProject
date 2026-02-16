@@ -247,6 +247,17 @@ module "eks" {
   }
 }
 
+# Install CoreDNS addon (required for DNS resolution in EKS, especially on Fargate)
+resource "aws_eks_addon" "coredns" {
+  cluster_name             = module.eks.cluster_name
+  addon_name               = "coredns"
+  addon_version            = "v1.11.1-eksbuild.4"  # Match EKS 1.30; update if needed
+  resolve_conflicts_on_update = "OVERWRITE"
+  tags = {
+    Name = "${var.project_name}-coredns-addon"
+  }
+}
+
 locals {
   oidc_issuer       = replace(module.eks.cluster_oidc_issuer_url, "https://", "")
   oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.oidc_issuer}"
