@@ -259,18 +259,30 @@ resource "aws_eks_addon" "coredns" {
 }
 
 locals {
-  oidc_issuer       = replace(module.eks.cluster_oidc_issuer_url, "https://", "")
+  # Use the standard OIDC issuer format (not dual-stack) for IAM trust policies
+  # Kubernetes uses: oidc.eks.us-east-1.amazonaws.com/id/...
+  # Extract the ID from the cluster OIDC issuer URL
+  oidc_issuer_url = module.eks.cluster_oidc_issuer_url
+  oidc_issuer_id  = regex("id/([^/]+)", local.oidc_issuer_url)[0]
+  # Standard format that Kubernetes actually uses
+  oidc_issuer       = "oidc.eks.${var.aws_region}.amazonaws.com/id/${local.oidc_issuer_id}"
   oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.oidc_issuer}"
 }
 
 # AWS Load Balancer Controller IAM (IRSA) – policy, role, OIDC; Ansible only applies ServiceAccount.
 # Uses EKS module outputs instead of a separate aws_eks_cluster data source so a single apply works on a fresh account.
 # EKS must still be created in the same apply (module.eks above).
-# EKS console "OIDC identity providers" will show 1 after apply.
+# Note: OIDC provider may already exist from EKS cluster creation; Terraform will reference it.
+# Use standard format (oidc.eks...) that Kubernetes actually uses for IRSA tokens
 resource "aws_iam_openid_connect_provider" "eks" {
-  url             = module.eks.cluster_oidc_issuer_url
+  url             = "https://${local.oidc_issuer}"
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]
+  
+  # Prevent errors if provider already exists (created by EKS or previous run)
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 resource "aws_iam_policy" "alb_controller" {
@@ -282,6 +294,8 @@ resource "aws_iam_policy" "alb_controller" {
 resource "aws_iam_role" "alb_controller" {
   name = "AWSLoadBalancerControllerRole"
 
+  # Trust policy for IRSA: allows ALB controller ServiceAccount to assume this role
+  # Uses standard OIDC issuer format (oidc.eks...) that Kubernetes actually uses for IRSA tokens
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
