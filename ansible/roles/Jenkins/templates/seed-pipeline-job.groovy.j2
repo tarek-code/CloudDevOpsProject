@@ -2,11 +2,12 @@
 // Job is created once at Jenkins startup if it does not already exist.
 
 import jenkins.model.Jenkins
-import hudson.model.FreeStyleProject
 import org.jenkinsci.plugins.workflow.job.WorkflowJob
 import org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition
-import jenkins.plugins.git.GitSCMSource
-import org.jenkinsci.plugins.workflow.multibranch.BranchJobProperty
+import hudson.plugins.git.GitSCM
+import hudson.plugins.git.UserRemoteConfig
+import hudson.plugins.git.BranchSpec
+import hudson.plugins.git.SubmoduleConfig
 
 def j = Jenkins.get()
 
@@ -16,37 +17,30 @@ def branch = "{{ jenkins_shared_library_version }}"
 def credId = "{{ jenkins_github_credential_id }}"
 def jenkinsfilePath = "{{ jenkins_seed_job_jenkinsfile | default('Jenkinsfile', true) }}"
 
-def existing = j.getItem(jobName)
-
-if (existing != null && existing instanceof org.jenkinsci.plugins.workflow.job.WorkflowJob) {
-  println "[init] Seed pipeline job '${jobName}' already exists, skipping creation."
-  return
+def job = j.getItem(jobName)
+if (job == null || !(job instanceof WorkflowJob)) {
+  println "[init] Creating seed pipeline job '${jobName}' from repo '${repoUrl}'."
+  job = j.createProject(WorkflowJob, jobName)
+} else {
+  println "[init] Updating existing seed pipeline job '${jobName}'."
 }
 
-println "[init] Creating seed pipeline job '${jobName}' from repo '${repoUrl}'."
-
-def job = new WorkflowJob(j, jobName)
-
-def scmSource = new GitSCMSource(repoUrl)
-scmSource.credentialsId = credId
-
-def flowDef = new CpsScmFlowDefinition(
-  new jenkins.plugins.git.GitSCM(
-    [new hudson.plugins.git.UserRemoteConfig(repoUrl, null, null, credId)],
-    [new hudson.plugins.git.BranchSpec("*/${branch}")],
-    false,
-    [],
-    null,
-    null,
-    []
-  ),
-  jenkinsfilePath
+def scm = new GitSCM(
+  [new UserRemoteConfig(repoUrl, null, null, credId)],
+  [new BranchSpec("*/${branch}")],
+  false,
+  Collections.<SubmoduleConfig>emptyList(),
+  null,
+  null,
+  Collections.emptyList()
 )
+
+def flowDef = new CpsScmFlowDefinition(scm, jenkinsfilePath)
 flowDef.setLightweight(true)
 
 job.setDefinition(flowDef)
-j.createProjectFromXML(jobName, job.getConfigFile().asInputStream())
-j.reload()
+job.save()
+j.save()
 
-println "[init] Seed pipeline job '${jobName}' created."
+println "[init] Seed pipeline job '${jobName}' configured."
 
