@@ -118,8 +118,18 @@
 
 - name: Wait for all ArgoCD pods to be Ready (covers application-controller StatefulSet and all controllers)
   ansible.builtin.shell: |
-    kubectl wait --for=condition=ready --timeout=300s pod \
-      -l app.kubernetes.io/part-of=argocd -n argocd
+    for i in $(seq 1 30); do
+      not_ready="$(kubectl get pods -n argocd -o jsonpath='{range .items[*]}{.metadata.name} {.status.containerStatuses[*].ready}{"\n"}{end}' \
+        | awk '$2 != "true" {print $1}')"
+      if [ -z "$not_ready" ]; then
+        echo "All ArgoCD pods are Ready"
+        exit 0
+      fi
+      echo "Waiting for ArgoCD pods to be Ready (attempt $i/30). Not ready: $not_ready"
+      sleep 10
+    done
+    echo "Timeout: Some ArgoCD pods are not Ready"
+    exit 1
   environment: "{{ helm_env }}"
   register: argocd_pods_verify
   changed_when: false
