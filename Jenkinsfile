@@ -9,7 +9,7 @@ pipeline {
     
     environment {
         IMAGE_TAG    = "${env.BUILD_NUMBER}"
-        ECR_REGISTRY = "809275433685.dkr.ecr.us-east-1.amazonaws.com"
+        ECR_REGISTRY = "183631347882.dkr.ecr.us-east-1.amazonaws.com"
         ECR_IMAGE    = "${ECR_REGISTRY}/ivolve-app"
         AWS_REGION   = "us-east-1"
         // GitHub credential ID (username/password) configured by Ansible from Vault; repo URL for push

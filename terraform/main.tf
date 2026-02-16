@@ -170,7 +170,7 @@ resource "aws_iam_instance_profile" "jenkins_ec2" {
 resource "aws_ecr_repository" "app" {
   name                 = var.ecr_repository_name
   image_tag_mutability = "MUTABLE"
-  force_delete         = true  # Allow destroy even when repository has images
+  force_delete         = true # Allow destroy even when repository has images
 }
 
 ##############################
@@ -252,13 +252,13 @@ module "eks" {
 resource "aws_eks_addon" "coredns" {
   cluster_name                = module.eks.cluster_name
   addon_name                  = "coredns"
-  addon_version               = "v1.11.1-eksbuild.4"  # Match EKS 1.30; update if needed
+  addon_version               = "v1.11.1-eksbuild.4" # Match EKS 1.30; update if needed
   resolve_conflicts_on_update = "OVERWRITE"
   tags = {
     Name = "${var.project_name}-coredns-addon"
   }
   timeouts {
-    create = "30m"  # Fargate clusters can take longer for CoreDNS to become ACTIVE
+    create = "30m" # Fargate clusters can take longer for CoreDNS to become ACTIVE
     update = "30m"
     delete = "20m"
   }
@@ -284,7 +284,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
   url             = "https://${local.oidc_issuer}"
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]
-  
+
   # Prevent errors if provider already exists (created by EKS or previous run)
   lifecycle {
     create_before_destroy = false
