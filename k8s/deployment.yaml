@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: ivolve-app
-          image: 809275433685.dkr.ecr.us-east-1.amazonaws.com/ivolve-app:6
+          image: 809275433685.dkr.ecr.us-east-1.amazonaws.com/ivolve-app:7
           ports:
             - containerPort: 5000
           resources:
