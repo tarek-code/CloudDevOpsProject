@@ -18,12 +18,13 @@ def call(String imageUrl, String manifestsDir = 'k8s') {
                 error("deployment.yaml not found in ${manifestsDir}")
             }
             echo "Updating image to: ${imageUrl}"
-            // Use a more precise sed pattern that preserves YAML structure
-            // Match the image line with proper indentation (10 spaces) and replace only the value after the colon
+            // Use a robust sed pattern that matches any indentation level and preserves it
+            // This matches: any whitespace + "image:" + anything, replaces with: same whitespace + "image:" + new URL
             sh """
-                sed -i 's|^\\(          image: \\).*|\\1${imageUrl}|' deployment.yaml
-                # Verify YAML is still valid (basic check)
-                python3 -c "import yaml; yaml.safe_load(open('deployment.yaml'))" 2>/dev/null || echo "Warning: YAML validation failed"
+                # Match any indentation before "image:" and preserve it, replace only the value
+                sed -i -E 's|^([[:space:]]*image:[[:space:]]*).*|\\1${imageUrl}|' deployment.yaml
+                # Verify the change was made
+                grep -q "image: ${imageUrl}" deployment.yaml || echo "Warning: Image update may have failed"
             """
         }
     }
