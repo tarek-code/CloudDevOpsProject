@@ -13,38 +13,57 @@ def call(String imageName) {
     
     script {
         // Check if Trivy is installed, if not, install it
-        def trivyInstalled = sh(
+        def trivyPath = sh(
             script: 'which trivy || echo "not found"',
             returnStdout: true
         ).trim()
         
-        if (trivyInstalled == 'not found') {
+        if (trivyPath == 'not found') {
             echo "Trivy not found, installing..."
-            sh '''
-                # Try apt method first, fallback to direct download if apt-key not available
-                if command -v apt-key >/dev/null 2>&1; then
-                    wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | apt-key add - && \
-                    echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | tee -a /etc/apt/sources.list.d/trivy.list && \
-                    apt-get update && \
-                    apt-get install -y trivy || echo "apt installation failed, trying direct download..."
+            def installDir = sh(
+                script: '''
+                    # Determine install directory (user-writable)
+                    if [ -w ~/bin ] 2>/dev/null || mkdir -p ~/bin 2>/dev/null; then
+                        echo ~/bin
+                    elif [ -n "${WORKSPACE}" ] && mkdir -p ${WORKSPACE}/bin 2>/dev/null; then
+                        echo ${WORKSPACE}/bin
+                    else
+                        echo /tmp
+                    fi
+                ''',
+                returnStdout: true
+            ).trim()
+            
+            sh """
+                # Try apt method first (requires sudo), fallback to direct download
+                if command -v apt-key >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+                    sudo wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add - && \
+                    echo "deb https://aquasecurity.github.io/trivy-repo/deb \$(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list && \
+                    sudo apt-get update && \
+                    sudo apt-get install -y trivy || echo "apt installation failed, trying direct download..."
                 fi
-                # Direct download method (works when apt-key is not available)
+                # Direct download method (works without sudo)
                 if ! command -v trivy >/dev/null 2>&1; then
-                    echo "Installing Trivy via direct download..."
-                    TRIVY_VERSION=$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/v//')
-                    wget -q https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz
-                    tar -xzf trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz
-                    mv trivy /usr/local/bin/trivy
-                    chmod +x /usr/local/bin/trivy
-                    rm -f trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz
+                    echo "Installing Trivy via direct download to ${installDir}..."
+                    TRIVY_VERSION=\$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/v//')
+                    wget -q https://github.com/aquasecurity/trivy/releases/download/v\${TRIVY_VERSION}/trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz
+                    tar -xzf trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz
+                    mkdir -p ${installDir}
+                    mv trivy ${installDir}/trivy
+                    chmod +x ${installDir}/trivy
+                    rm -f trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz
+                    echo "Trivy installed to ${installDir}/trivy"
                 fi
-            '''
+            """
+            // Update PATH for subsequent commands
+            env.PATH = "${installDir}:${env.PATH}"
         }
         
-        // Scan the image
+        // Scan the image (use full path if needed)
         echo "Scanning image: ${imageName}"
         try {
             sh """
+                export PATH=${env.PATH}
                 trivy image --exit-code 0 --severity HIGH,CRITICAL ${imageName} || echo "Scan completed with findings"
             """
         } catch (Exception e) {
