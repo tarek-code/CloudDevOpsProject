@@ -1,0 +1,26 @@
+# Allow Argo CD pods to schedule on EKS Fargate nodes (they have taint eks.amazonaws.com/compute-type: fargate)
+global:
+  tolerations:
+    - key: eks.amazonaws.com/compute-type
+      operator: Equal
+      value: fargate
+      effect: NoSchedule
+
+# Disable Dex (avoids server.secretkey missing); use Argo CD built-in auth (admin / local users)
+dex:
+  enabled: false
+
+# Repo-server health checks can take 5+ sec on Fargate; default timeout 1s causes CrashLoopBackOff
+repoServer:
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 20
+    timeoutSeconds: 15
+    failureThreshold: 5
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 20
+    timeoutSeconds: 15
+    failureThreshold: 5

@@ -1,0 +1,6 @@
+# Allow ALB controller pods to schedule on EKS Fargate nodes
+tolerations:
+  - key: eks.amazonaws.com/compute-type
+    operator: Equal
+    value: fargate
+    effect: NoSchedule

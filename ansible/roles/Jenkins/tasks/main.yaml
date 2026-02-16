@@ -102,5 +102,12 @@
     executable: /bin/bash
   changed_when: false
 
+- name: Copy kubeconfig to ec2-user so kubectl works when SSH as ec2-user (not just root)
+  ansible.builtin.shell: |
+    mkdir -p /home/ec2-user/.kube
+    cp /root/.kube/config /home/ec2-user/.kube/config
+    chown -R ec2-user:ec2-user /home/ec2-user/.kube
+  changed_when: true
+
 - name: Configure Jenkins Shared Library (JCasC)
   ansible.builtin.include_tasks: jenkins-shared-library.yaml

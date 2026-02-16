@@ -57,9 +57,32 @@
   changed_when: remove_webhook.rc == 0
   failed_when: false
 
-- name: Install ArgoCD into EKS (no --wait; Fargate is slow; we wait for deployments in next task)
+- name: Copy ArgoCD Fargate toleration values to host
+  ansible.builtin.copy:
+    src: argocd-fargate-values.yaml
+    dest: /tmp/argocd-fargate-values.yaml
+    mode: "0644"
+
+- name: Wait for argocd namespace to be gone (if Terminating, Helm cannot create resources)
   ansible.builtin.shell: |
-    /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace --timeout 3m --no-hooks
+    for i in $(seq 1 24); do
+      if ! kubectl get namespace argocd 2>/dev/null; then
+        echo "Namespace argocd is gone"
+        exit 0
+      fi
+      echo "Waiting for namespace argocd to terminate... ($i/24)"
+      sleep 10
+    done
+    echo "Timeout: namespace still exists or terminating"
+    exit 1
+  environment: "{{ helm_env }}"
+  register: argocd_ns_wait
+  changed_when: false
+  failed_when: argocd_ns_wait.rc != 0
+
+- name: Install ArgoCD into EKS (with Fargate toleration; hooks run so redis-secret-init creates TLS secrets)
+  ansible.builtin.shell: |
+    /usr/local/bin/helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace --timeout 3m -f /tmp/argocd-fargate-values.yaml
   environment: "{{ helm_env }}"
   register: argocd_helm
   changed_when: true
@@ -102,12 +125,30 @@
   until: argocd_apply.rc == 0
   changed_when: true
 
-- name: Install AWS Load Balancer Controller (after ArgoCD so webhook is not required during ArgoCD install)
+- name: Get EKS cluster VPC ID (required for ALB controller on Fargate – no instance metadata)
+  ansible.builtin.shell: |
+    /usr/local/bin/aws eks describe-cluster --name {{ cluster_name }} --region {{ aws_region }} \
+      --query 'cluster.resourcesVpcConfig.vpcId' --output text
+  environment:
+    PATH: "/usr/local/bin:/usr/bin:/bin"
+  register: eks_vpc_id_out
+  changed_when: false
+
+- name: Copy ALB controller Fargate toleration values to host
+  ansible.builtin.copy:
+    src: alb-controller-fargate-values.yaml
+    dest: /tmp/alb-controller-fargate-values.yaml
+    mode: "0644"
+
+- name: Install AWS Load Balancer Controller (region + vpcId at top level for Fargate; no instance metadata)
   ansible.builtin.shell: |
     /usr/local/bin/helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
       -n kube-system \
       --set clusterName={{ cluster_name }} \
       --set serviceAccount.create=false \
-      --set serviceAccount.name=aws-load-balancer-controller
+      --set serviceAccount.name=aws-load-balancer-controller \
+      --set region={{ aws_region }} \
+      --set vpcId={{ eks_vpc_id_out.stdout }} \
+      -f /tmp/alb-controller-fargate-values.yaml
   environment: "{{ helm_env }}"
   changed_when: true
