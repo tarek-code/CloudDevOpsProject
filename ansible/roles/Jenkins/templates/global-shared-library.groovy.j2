@@ -76,6 +76,23 @@ libConfig.implicit = false
 libConfig.allowVersionOverride = true
 libConfig.includeInChangesets = false
 
+// Set libraryPath using reflection (property not exposed in API but exists internally)
+def libPath = "{{ jenkins_shared_library_path | default('Shared-Library', true) }}"
+try {
+  def libPathField = libConfig.class.getDeclaredField("libraryPath")
+  libPathField.setAccessible(true)
+  libPathField.set(libConfig, libPath)
+  println "[init] Set libraryPath to '${libPath}' via reflection"
+} catch (NoSuchFieldException e) {
+  // Fallback: try to set via Groovy property access (some versions support this)
+  try {
+    libConfig.setProperty("libraryPath", libPath)
+    println "[init] Set libraryPath to '${libPath}' via property access"
+  } catch (Exception e2) {
+    println "[init] WARNING: Could not set libraryPath (may need manual UI config). Error: ${e2.message}"
+  }
+}
+
 if (existingLib != null) {
   libs.remove(existingLib)
 }

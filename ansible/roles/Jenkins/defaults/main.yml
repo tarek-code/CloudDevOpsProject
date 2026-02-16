@@ -1,8 +1,9 @@
 ---
-# Shared Library configured via JCasC (Ansible)
+# Shared Library configured via Groovy init script (Ansible)
 jenkins_shared_library_name: "ivolve-shared-library"
 jenkins_shared_library_version: "main"
 jenkins_shared_library_repo: "https://github.com/tarek-code/CloudDevOpsProject.git"
+jenkins_shared_library_path: "Shared-Library"  # Subfolder in repo containing vars/
 
 # Paths (Amazon Linux 2 / RHEL Jenkins package)
 jenkins_home: "/var/lib/jenkins"
