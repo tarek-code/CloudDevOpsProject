@@ -21,11 +21,11 @@ License
 
 ### 📸 Screenshots
 
-> **📌 Note:** Filenames below are examples. Rename them to match the actual files you added (for example under a `screenshots/` folder) so the images render correctly on GitHub.
+> **📌 Note:** Filenames below are examples. Rename them to match the actual files you added (for example under a `Screenshots/` folder) so the images render correctly on GitHub.
 
-| Jenkins Pipeline View | Argo CD Application Sync | Application Running via ALB |
-| --------------------- | ------------------------ | --------------------------- |
-| ![Jenkins Pipeline](screenshots/jenkins-pipeline.png) | ![Argo CD](screenshots/argocd-app.png) | ![App UI](screenshots/app-ui.png) |
+| Jenkins Pipeline View | ALB & Target Group | Final App Result |
+| --------------------- | ------------------ | ---------------- |
+| ![Jenkins Pipeline](Screenshots/jenkins-pipline-created-after-ansible-finished.png) | ![ALB & Target Group](Screenshots/aws-alb-info.png) | ![Final Result](Screenshots/final-result-from-alb.png) |
 
 - **Left**: Jenkins multi‑stage pipeline (build → scan → push → update manifests → post actions).  
 - **Middle**: Argo CD showing the application synced and healthy in the EKS cluster.  
@@ -669,7 +669,7 @@ Key details:
 2. Review the plan carefully, then type `yes` to create the AWS resources.  
 3. When the apply finishes, note the outputs (EKS name, VPC ID, Jenkins IP, etc.) for later steps.
 
-![Terraform Apply](Screenshots/terraform-apply.png)
+![Terraform Apply](Screenshots/hashocorp-workspace-runs.png)
 
 > **📌 Tip:** Commit your `.tf` files, but never commit real `terraform.tfvars` with secrets or personal account IDs.
 
@@ -1254,7 +1254,7 @@ It shows how using a Shared Library keeps the Jenkinsfile short and readable whi
 2. Jenkins automatically runs the pipeline: *Checkout → BuildImage → ScanImage → PushImage → UpdateManifests → PushManifests → Cleanup*.  
 3. In the Jenkins UI, confirm that all stages are green and the build completed successfully.
 
-![Jenkins Pipeline](Screenshots/jenkins-pipeline.png)
+![Jenkins Pipeline](Screenshots/jenkins-pipline-created-after-ansible-finished.png)
 
 ---
 
@@ -1277,7 +1277,7 @@ This chapter covers:
 2. Find the `ivolve-app` (or your app) in the **Applications** list.  
 3. Confirm the status is **Healthy** and **Synced**, and drill into the tree view to see all Kubernetes resources.
 
-![Argo CD Application](Screenshots/argocd-app.png)
+![Argo CD Application](Screenshots/jekins-console-output.png)
 
 ---
 
@@ -1305,7 +1305,7 @@ kubectl get pods -n ivolve
 2. All pods should be in **Running** state, scheduled onto Fargate.  
 3. If pods are pending, check IAM (IRSA), Fargate profiles, and namespace labels.
 
-![EKS Pods](Screenshots/eks-pods.png)
+![EKS Pods](Screenshots/cordns-addons-in-eks.png)
 
 ---
 
@@ -1337,9 +1337,9 @@ After you follow all the steps in this README, the **final result** looks like t
 
 Visually:
 
-| Jenkins Pipeline View | Argo CD Application Sync | Application Running via ALB |
-| --------------------- | ------------------------ | --------------------------- |
-| ![Jenkins Pipeline](screenshots/jenkins-pipeline.png) | ![Argo CD](screenshots/argocd-app.png) | ![App UI](screenshots/app-ui.png) |
+| Jenkins Pipeline View | ALB & Target Group | Final App Result |
+| --------------------- | ------------------ | ---------------- |
+| ![Jenkins Pipeline](Screenshots/jenkins-pipline-created-after-ansible-finished.png) | ![ALB & Target Group](Screenshots/aws-alb-info.png) | ![Final Result](Screenshots/final-result-from-alb.png) |
 
 Think of this as the **“victory screen”** for the project: it proves that Terraform, Ansible, Jenkins, Docker, Trivy, Argo CD, Kubernetes, and AWS networking are all working together end‑to‑end.
 
