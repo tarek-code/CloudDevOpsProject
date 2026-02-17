@@ -19,11 +19,26 @@ License
 
 ---
 
+### 📸 Screenshots
+
+> **📌 Note:** Filenames below are examples. Rename them to match the actual files you added (for example under a `screenshots/` folder) so the images render correctly on GitHub.
+
+| Jenkins Pipeline View | Argo CD Application Sync | Application Running via ALB |
+| --------------------- | ------------------------ | --------------------------- |
+| ![Jenkins Pipeline](screenshots/jenkins-pipeline.png) | ![Argo CD](screenshots/argocd-app.png) | ![App UI](screenshots/app-ui.png) |
+
+- **Left**: Jenkins multi‑stage pipeline (build → scan → push → update manifests → post actions).  
+- **Middle**: Argo CD showing the application synced and healthy in the EKS cluster.  
+- **Right**: The Python/Flask app successfully served through the AWS ALB and Kubernetes Ingress.
+
+---
+
 ### 📑 Table of Contents
 
 - [📘 CloudDevOpsProject — Complete Technical Book](#-clouddevopsproject--complete-technical-book)
   - [📌 FRONT MATTER](#-front-matter)
     - [🏷️ Badges](#️-badges)
+    - [📸 Screenshots](#-screenshots)
     - [📑 Table of Contents](#-table-of-contents)
   - [CHAPTER 0 — Introduction](#chapter-0--introduction)
     - [0.1 — What is This Project?](#01--what-is-this-project)
@@ -648,6 +663,17 @@ Key details:
 
 > **📌 Lesson learned:** Initially, port 80 was not allowed in NACL → ALB timed out. Adding rule 125 fixed it. This is codified here to prevent regression.
 
+#### 1.x — Terraform Apply (Infrastructure Provisioned)
+
+1. From the `terraform/` directory, run `terraform init` and then `terraform apply`.  
+2. Review the plan carefully, then type `yes` to create the AWS resources.  
+3. When the apply finishes, note the outputs (EKS name, VPC ID, Jenkins IP, etc.) for later steps.
+
+**Screenshot:**  
+![Terraform Apply](Screenshots/terraform-apply.png)
+
+> **📌 Tip:** Commit your `.tf` files, but never commit real `terraform.tfvars` with secrets or personal account IDs.
+
 **📄 File:** `terraform/main.tf` (Security group)
 
 ```hcl
@@ -1223,6 +1249,17 @@ It shows how using a Shared Library keeps the Jenkinsfile short and readable whi
 
 ---
 
+#### 5.x — What the Jenkins Pipeline Looks Like
+
+1. Push code changes to GitHub (app, Dockerfile, or manifests).  
+2. Jenkins automatically runs the pipeline: *Checkout → BuildImage → ScanImage → PushImage → UpdateManifests → PushManifests → Cleanup*.  
+3. In the Jenkins UI, confirm that all stages are green and the build completed successfully.
+
+**Screenshot:**  
+![Jenkins Pipeline](Screenshots/jenkins-pipeline.png)
+
+---
+
 ## CHAPTER 6 — GitOps with ArgoCD
 
 This chapter covers:
@@ -1236,6 +1273,17 @@ This chapter covers:
 
 ---
 
+#### 6.x — Argo CD Showing the App in Sync
+
+1. Open the Argo CD web UI and log in.  
+2. Find the `ivolve-app` (or your app) in the **Applications** list.  
+3. Confirm the status is **Healthy** and **Synced**, and drill into the tree view to see all Kubernetes resources.
+
+**Screenshot:**  
+![Argo CD Application](Screenshots/argocd-app.png)
+
+---
+
 ## CHAPTER 7 — Kubernetes Manifests
 
 This chapter walks through:
@@ -1246,6 +1294,22 @@ This chapter walks through:
 - `k8s/ingress.yaml` — Ingress definition with ALB annotations (scheme, target-type, listen-ports, inbound-cidrs).
 
 You’ll see how these manifests represent the final, desired state that Argo CD syncs to EKS.
+
+---
+
+#### 7.x — Pods Running on EKS Fargate
+
+1. From a machine with kubeconfig (Jenkins EC2 or your laptop), run:
+
+```bash
+kubectl get pods -n ivolve
+```
+
+2. All pods should be in **Running** state, scheduled onto Fargate.  
+3. If pods are pending, check IAM (IRSA), Fargate profiles, and namespace labels.
+
+**Screenshot:**  
+![EKS Pods](Screenshots/eks-pods.png)
 
 ---
 
@@ -1264,6 +1328,24 @@ This chapter combines:
 - A step‑by‑step **CI/CD execution trace** from `git push` to “page loads in browser”.
 
 It is intended for readers who already understand the individual pieces and want a holistic mental model of the whole platform.
+
+---
+
+### 8.5 — Final Result (What You Actually See)
+
+After you follow all the steps in this README, the **final result** looks like this:
+
+- **Jenkins**: a multi‑stage pipeline that automatically builds, scans, pushes, and deploys your app.  
+- **Argo CD**: an app pane that shows your Kubernetes resources in sync and healthy.  
+- **The App**: a Python/Flask web page being served through an AWS ALB to EKS Fargate pods.
+
+Visually:
+
+| Jenkins Pipeline View | Argo CD Application Sync | Application Running via ALB |
+| --------------------- | ------------------------ | --------------------------- |
+| ![Jenkins Pipeline](screenshots/jenkins-pipeline.png) | ![Argo CD](screenshots/argocd-app.png) | ![App UI](screenshots/app-ui.png) |
+
+Think of this as the **“victory screen”** for the project: it proves that Terraform, Ansible, Jenkins, Docker, Trivy, Argo CD, Kubernetes, and AWS networking are all working together end‑to‑end.
 
 ---
 
