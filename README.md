@@ -1557,16 +1557,3 @@ Common checks:
 
 ---
 
-## ✅ Old Docs Replaced
-
-This README **absorbs and replaces** all previous markdown docs:
-
-- Old `README.md` (previous minimal version).
-- `docs/ALB-SECURITY-GROUPS.md`
-- `docs/ALB-TROUBLESHOOT-TIMEOUT.md`
-
-You can safely delete the two files under `docs/` since their content is now in:
-
-- **Chapter 8** (architecture + network/IAM)
-- **Chapter 10** (appendix references)
-
