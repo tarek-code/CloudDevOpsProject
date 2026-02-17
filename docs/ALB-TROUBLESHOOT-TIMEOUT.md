@@ -48,14 +48,17 @@ aws elbv2 describe-load-balancers --region $REGION --load-balancer-arns $ALB_ARN
 For **each SubnetId** from the output, check if that subnet has a route to an **Internet Gateway**:
 
 ```bash
-# Replace SUBNET_ID with each subnet from above
-SUBNET_ID=subnet-xxxxxxxx
-aws ec2 describe-route-tables --region $REGION --filters "Name=association.subnet-id,Values=$SUBNET_ID" \
-  --query 'RouteTables[].Routes[?GatewayId!=`local`].GatewayId' --output text
+# Replace SUBNET_ID with each subnet from above (e.g. subnet-0384895451477e827 subnet-05a6645183380e3c1)
+REGION=us-east-1
+for SUBNET_ID in subnet-0384895451477e827 subnet-05a6645183380e3c1; do
+  echo -n "$SUBNET_ID: "
+  aws ec2 describe-route-tables --region $REGION --filters "Name=association.subnet-id,Values=$SUBNET_ID" \
+    --query 'RouteTables[].Routes[?GatewayId!=`local`].GatewayId' --output text | grep -q igw- && echo "PUBLIC (igw)" || echo "PRIVATE (no igw)"
+done
 ```
 
-- If you see **`igw-xxxxx`** → that subnet is **public** (good).
-- If you see **`nat-xxxxx`** or nothing → that subnet is **private**. An ALB in only private subnets **cannot** be reached from the internet.
+- **`igw-xxxxx`** → that subnet is **public** (good).
+- **`nat-xxxxx`** or nothing → that subnet is **private**. An ALB in only private subnets **cannot** be reached from the internet.
 
 ## 3. Fix: put the ALB in public subnets
 

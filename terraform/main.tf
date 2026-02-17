@@ -20,6 +20,7 @@ module "vpc" {
     { rule_number = 100, rule_action = "allow", from_port = var.ssh_port, to_port = var.ssh_port, protocol = var.nacl_tcp_protocol, cidr_block = var.allowed_cidr },
     { rule_number = 110, rule_action = "allow", from_port = var.jenkins_port, to_port = var.jenkins_port, protocol = var.nacl_tcp_protocol, cidr_block = var.allowed_cidr },
     { rule_number = 120, rule_action = "allow", from_port = var.https_port, to_port = var.https_port, protocol = var.nacl_tcp_protocol, cidr_block = var.allowed_cidr },
+    { rule_number = 125, rule_action = "allow", from_port = 80, to_port = 80, protocol = var.nacl_tcp_protocol, cidr_block = "0.0.0.0/0" }, # HTTP for ALB in public subnet
     # Return traffic for outbound connections (e.g. yum, S3) - required for EC2 in public subnet to reach internet
     { rule_number = 130, rule_action = "allow", from_port = 1024, to_port = 65535, protocol = var.nacl_tcp_protocol, cidr_block = "0.0.0.0/0" },
   ]
