@@ -669,7 +669,6 @@ Key details:
 2. Review the plan carefully, then type `yes` to create the AWS resources.  
 3. When the apply finishes, note the outputs (EKS name, VPC ID, Jenkins IP, etc.) for later steps.
 
-**Screenshot:**  
 ![Terraform Apply](Screenshots/terraform-apply.png)
 
 > **📌 Tip:** Commit your `.tf` files, but never commit real `terraform.tfvars` with secrets or personal account IDs.
@@ -1255,7 +1254,6 @@ It shows how using a Shared Library keeps the Jenkinsfile short and readable whi
 2. Jenkins automatically runs the pipeline: *Checkout → BuildImage → ScanImage → PushImage → UpdateManifests → PushManifests → Cleanup*.  
 3. In the Jenkins UI, confirm that all stages are green and the build completed successfully.
 
-**Screenshot:**  
 ![Jenkins Pipeline](Screenshots/jenkins-pipeline.png)
 
 ---
@@ -1279,7 +1277,6 @@ This chapter covers:
 2. Find the `ivolve-app` (or your app) in the **Applications** list.  
 3. Confirm the status is **Healthy** and **Synced**, and drill into the tree view to see all Kubernetes resources.
 
-**Screenshot:**  
 ![Argo CD Application](Screenshots/argocd-app.png)
 
 ---
@@ -1308,7 +1305,6 @@ kubectl get pods -n ivolve
 2. All pods should be in **Running** state, scheduled onto Fargate.  
 3. If pods are pending, check IAM (IRSA), Fargate profiles, and namespace labels.
 
-**Screenshot:**  
 ![EKS Pods](Screenshots/eks-pods.png)
 
 ---
