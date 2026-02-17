@@ -2,8 +2,14 @@
 
 If you already added inbound HTTP 80 from 0.0.0.0/0 to the ALB security group(s) and still get a timeout:
 
-- **Curl from inside VPC also times out** → Something is blocking traffic **to** the ALB (listener, security groups, or NACLs). See section "When curl from EC2 also times out" below.
+- **Curl from inside VPC also times out** → Something is blocking traffic **to** the ALB (listener, security groups, or **NACLs**). See section "When curl from EC2 also times out" below.
 - **Curl from inside VPC works** → ALB is in **private subnets** (no public IP). See section 2–3 below.
+
+## Common fix: Public subnet NACL must allow port 80
+
+The ALB lives in **public** subnets. Those subnets use a **Network ACL (NACL)**. If the NACL does **not** allow **inbound TCP port 80** from **0.0.0.0/0**, the ALB will not receive HTTP traffic and you get a connection timeout (from the internet and from inside the VPC).
+
+**This project’s Terraform** already includes an inbound rule for HTTP 80 on the public NACL (`terraform/main.tf` → `public_inbound_acl_rules` → rule 125). After `terraform apply`, the public NACL allows port 80. If you created the VPC or NACL manually or with an older config, add the rule in the Console (VPC → Network ACLs → your public NACL → Edit inbound rules → add HTTP 80 from 0.0.0.0/0) or re-apply Terraform.
 
 ## When curl from EC2 (inside VPC) also times out
 
@@ -97,8 +103,8 @@ Then delete the Ingress and apply again.
 
 | Symptom | Likely cause |
 |--------|----------------|
+| Timeout from browser **and** from EC2 | **Public NACL** missing inbound **port 80** from 0.0.0.0/0 (add in Console or ensure Terraform has the rule and re-apply). Or listener / ALB SGs. |
 | Timeout from browser, curl from EC2 works | ALB in **private** subnets → tag public subnets and recreate Ingress |
-| Timeout from browser and from EC2 | Listener, SG (ALB→pods), or NACLs |
 | 503 / no healthy targets | Target group health check or SG from ALB to pods (port 5000) |
 
-After fixing subnets and recreating the Ingress, try the ALB URL again from your browser.
+After fixing NACL, subnets, or SGs, try the ALB URL again from your browser.

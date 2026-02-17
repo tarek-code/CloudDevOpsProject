@@ -27,7 +27,7 @@ Graduation project: CI/CD with Jenkins, ArgoCD, Kubernetes (EKS), Terraform (AWS
                                     ArgoCD syncs from Git (k8s/) ──────────┘
 ```
 
-- **Terraform**: Provisions VPC, public subnets, IGW, NACL, Jenkins EC2, security groups, EKS (Fargate), SNS, CloudWatch. State in HCP Terraform (Terraform Cloud).
+- **Terraform**: Provisions VPC, public subnets, IGW, NACL (public inbound: SSH, Jenkins, HTTP 80 for ALB, HTTPS, return traffic), Jenkins EC2, security groups, EKS (Fargate), SNS, CloudWatch. State in HCP Terraform (Terraform Cloud).
 - **Ansible**: Targets Jenkins EC2 (dynamic inventory by tag). Installs Git, Java, Docker, Jenkins, Trivy, kubectl; configures EKS access; installs Helm, ArgoCD, AWS LB Controller; applies ArgoCD Application.
 - **Jenkins**: Pipeline (Jenkinsfile + Shared Library) builds image, scans (Trivy), pushes to ECR, updates `k8s/deployment.yaml`, pushes manifests to Git.
 - **ArgoCD**: Syncs from this repo `k8s/` into EKS namespace `ivolve` (Deployment, Service, Ingress).
@@ -46,6 +46,7 @@ Graduation project: CI/CD with Jenkins, ArgoCD, Kubernetes (EKS), Terraform (AWS
 | `Shared-Library/` | Jenkins Shared Library (buildImage, scanImage, pushImageECR, etc.); Ansible configures Jenkins to use it via JCasC |
 | `Jenkinsfile` | CI pipeline: Build → Scan → Push Image → Remove Local → Update Manifests → Push Manifests |
 | `argocd/` | ArgoCD Application manifest |
+| `docs/` | ALB troubleshooting (timeout, NACL, SGs), security group behavior |
 
 ---
 
