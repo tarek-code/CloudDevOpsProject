@@ -1,3 +1,8 @@
+# Use only the Managed (frontend) SG on the ALB; controller uses it as source for pod SG rules.
+# Avoids attaching the Shared Backend SG (which has no inbound by design) so ALB reachability
+# depends only on the Managed SG's inbound-cidrs/listen-ports rules.
+enableBackendSecurityGroup: false
+
 # Allow ALB controller pods to schedule on EKS Fargate nodes
 tolerations:
   - key: eks.amazonaws.com/compute-type

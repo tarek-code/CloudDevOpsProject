@@ -154,6 +154,19 @@ resource "aws_iam_role_policy" "jenkins_ecr_eks" {
           "eks:DescribeCluster"
         ]
         Resource = "arn:aws:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/*"
+      },
+      {
+        Sid    = "ELBAndEC2DescribeForDiagnostics"
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeListeners",
+          "ec2:DescribeRouteTables",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups"
+        ]
+        Resource = "*"
       }
     ]
   })
