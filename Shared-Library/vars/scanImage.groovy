@@ -46,8 +46,8 @@ def call(String imageName) {
                 if ! command -v trivy >/dev/null 2>&1; then
                     echo "Installing Trivy via direct download to ${installDir}..."
                     # Pinned version (no curl/sed parsing – works on all Jenkins nodes)
-                    TRIVY_TAG=v0.52.4
-                    TRIVY_VERSION=0.52.4
+                    TRIVY_TAG=v0.69.1
+                    TRIVY_VERSION=0.69.1
                     wget -q "https://github.com/aquasecurity/trivy/releases/download/\${TRIVY_TAG}/trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz" -O trivy.tar.gz
                     tar -xzf trivy.tar.gz
                     mkdir -p ${installDir}
