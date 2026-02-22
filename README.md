@@ -1296,6 +1296,67 @@ compose:
 
 ---
 
+### Lesson 2.1.3 — File: `ansible/requirements.yml`
+
+**📄 File:** `ansible/requirements.yml`
+
+```yaml
+---
+# Install before running the playbook (dynamic inventory + alb-iam role need these):
+#   ansible-galaxy collection install -r ansible/requirements.yml
+collections:
+  - name: amazon.aws
+    version: ">=6.0.0"
+```
+
+**Purpose:** Declares Ansible Galaxy collections required by the playbook. The `amazon.aws` collection provides the AWS EC2 inventory plugin and AWS modules.
+
+**Line-by-line:**
+- `---` — YAML document start.
+- `collections:` — List of collections to install.
+- `name: amazon.aws` — The Amazon AWS collection; includes `aws_ec2` inventory plugin and AWS modules.
+- `version: ">=6.0.0"` — Minimum version; use `ansible-galaxy collection install -r ansible/requirements.yml` before running the playbook.
+
+---
+
+### Lesson 2.1.4 — File: `ansible/group_vars/all/vault.yml.example` & `ansible/group_vars/service_jenkins.yml`
+
+**📄 File:** `ansible/group_vars/all/vault.yml.example`
+
+```yaml
+# DO NOT put real credentials. Copy to vault.yml, edit, then encrypt.
+# With vault: ansible-vault encrypt ansible/group_vars/all/vault.yml
+# Or pass via -e: -e jenkins_github_username=YOUR_USER -e jenkins_github_token=YOUR_PAT
+---
+jenkins_github_username: "your-github-username"
+jenkins_github_token: "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+**Purpose:** Example template for GitHub credentials. Used by the Jenkins role to create GitHub credentials in Jenkins. Copy to `vault.yml`, add real values, then encrypt with `ansible-vault encrypt`.
+
+**Line-by-line:**
+- `jenkins_github_username` — GitHub username or org for the repo.
+- `jenkins_github_token` — GitHub Personal Access Token (PAT) with `repo` scope for push/clone.
+
+---
+
+**📄 File:** `ansible/group_vars/service_jenkins.yml`
+
+```yaml
+---
+ansible_user: ec2-user
+ansible_ssh_private_key_file: "~/.ssh/Jenkins_key.pem"
+ansible_python_interpreter: /usr/bin/python3.8
+ansible_become_timeout: 120
+```
+
+**Purpose:** Group variables for hosts in `service_jenkins`. Applied to all Jenkins EC2 instances discovered by dynamic inventory.
+
+**Line-by-line:**
+- `ansible_user: ec2-user` — SSH user on Amazon Linux 2.
+- `ansible_ssh_private_key_file` — Path to the `.pem`; must match `jenkins_key_name` in Terraform.
+- `ansible_python_interpreter: /usr/bin/python3.8` — Use Python 3.8 so Ansible modules work on Amazon Linux 2.
+- `ansible_become_timeout: 120` — Longer timeout for `sudo` on slow or high-latency SSH.
 
 ---
 
@@ -1327,7 +1388,247 @@ jenkins_github_credential_id: "github-credentials"
 
 ---
 
-### Lesson 2.3.1 — File: `ansible/roles/alb-iam/templates/serviceaccount.yaml.j2`
+### Lesson 2.2.2 — File: `ansible/roles/Jenkins/handlers/main.yaml`
+
+**📄 File:** `ansible/roles/Jenkins/handlers/main.yaml`
+
+```yaml
+---
+- name: Restart Jenkins
+  ansible.builtin.service:
+    name: jenkins
+    state: restarted
+```
+
+**Purpose:** Handler that restarts the Jenkins service. Triggered by `notify: Restart Jenkins` when the Jenkins user is added to the docker group, so Jenkins can use Docker.
+
+**Line-by-line:**
+- `---` — YAML document start.
+- `name: Restart Jenkins` — Handler name; referenced by `notify: Restart Jenkins`.
+- `ansible.builtin.service:` — Uses the service module.
+- `name: jenkins` — The Jenkins systemd service.
+- `state: restarted` — Restart the service. Handlers run once at the end of the play if notified.
+
+---
+
+### Lesson 2.2.3 — File: `ansible/roles/Jenkins/tasks/main.yaml`
+
+**📄 File:** `ansible/roles/Jenkins/tasks/main.yaml` (key tasks)
+
+```yaml
+---
+- name: Update all packages
+  ansible.builtin.shell: yum update -y
+  args: { executable: /bin/bash }
+
+- name: Install required packages (Java 21 for Jenkins 2.541 LTS)
+  ansible.builtin.shell: |
+    yum install -y git docker trivy tar unzip vim nano curl ...
+  args: { executable: /bin/bash }
+
+- name: Enable Corretto 17 and install Java 17 for Jenkins LTS
+  ansible.builtin.shell: |
+    amazon-linux-extras enable corretto17
+    yum install -y java-17-amazon-corretto
+
+- name: Start and enable Docker
+  ansible.builtin.service: { name: docker, state: started, enabled: true }
+
+- name: Add Jenkins repo
+  ansible.builtin.get_url:
+    url: https://pkg.jenkins.io/rpm-stable/jenkins.repo
+    dest: /etc/yum.repos.d/jenkins.repo
+
+- name: Install Jenkins
+  ansible.builtin.shell: yum install -y jenkins
+
+- name: Add Jenkins user to docker group
+  ansible.builtin.user: { name: jenkins, groups: docker, append: true }
+  notify: Restart Jenkins
+
+- name: Install kubectl (match EKS 1.30)
+  ansible.builtin.get_url:
+    url: https://s3.us-west-2.amazonaws.com/amazon-eks/1.30.14/.../kubectl
+    dest: /usr/local/bin/kubectl
+
+- name: Install AWS CLI v2
+  ansible.builtin.shell: | ... curl ... awscli-exe-linux-x86_64.zip ...
+
+- name: Update kubeconfig
+  ansible.builtin.shell: aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+
+- name: Fix kubeconfig exec apiVersion (v1alpha1 → v1beta1)
+  ansible.builtin.shell: sed -i 's/...v1alpha1.../v1beta1.../' /root/.kube/config
+
+- name: Copy kubeconfig to ec2-user
+  ansible.builtin.shell: cp /root/.kube/config /home/ec2-user/.kube/config
+
+- name: Configure Jenkins Shared Library
+  ansible.builtin.include_tasks: jenkins-shared-library.yaml
+```
+
+**Purpose:** Main tasks for the Jenkins role. Install packages, Jenkins, Docker, kubectl, AWS CLI v2, configure kubeconfig, and include the Shared Library setup.
+
+**Line-by-line:**
+- `yum update -y` — Update all packages; uses shell because dnf Python module may be missing.
+- `yum install -y git docker trivy ...` — Tools needed for the pipeline (Docker for builds, Trivy for scans, etc.).
+- `amazon-linux-extras enable corretto17` — Java 17 for Jenkins LTS.
+- `yum install -y jenkins` — Jenkins from official repo.
+- `notify: Restart Jenkins` — Trigger handler so Jenkins restarts after being added to docker group.
+- `kubectl` — Downloaded from EKS URL; version must match cluster.
+- `aws eks update-kubeconfig` — Creates kubeconfig for the cluster.
+- `sed ... v1alpha1 ... v1beta1` — EKS exec plugin v1alpha1 is deprecated; Helm/kubectl need v1beta1.
+- `cp ... to ec2-user` — Lets ec2-user use kubectl when SSH’d (not just root).
+- `include_tasks: jenkins-shared-library.yaml` — Runs Shared Library and seed job configuration.
+
+---
+
+### Lesson 2.2.4 — File: `ansible/roles/Jenkins/tasks/jenkins-shared-library.yaml`
+
+**📄 File:** `ansible/roles/Jenkins/tasks/jenkins-shared-library.yaml`
+
+```yaml
+---
+- name: Ensure Jenkins init.groovy.d directory exists
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}/init.groovy.d"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: "0755"
+
+- name: Deploy Groovy init script to configure Shared Library and GitHub credentials
+  ansible.builtin.template:
+    src: global-shared-library.groovy.j2
+    dest: "{{ jenkins_home }}/init.groovy.d/global-shared-library.groovy"
+
+- name: Deploy Groovy init script to create seed pipeline job
+  ansible.builtin.template:
+    src: seed-pipeline-job.groovy.j2
+    dest: "{{ jenkins_home }}/init.groovy.d/seed-pipeline-job.groovy"
+
+- name: Restart Jenkins to load Groovy init script
+  ansible.builtin.service:
+    name: jenkins
+    state: restarted
+```
+
+**Purpose:** Deploys Groovy init scripts into `$JENKINS_HOME/init.groovy.d/`. Jenkins runs these at startup to configure the Shared Library, GitHub credentials, and the seed pipeline job.
+
+**Line-by-line:**
+- `path: "{{ jenkins_home }}/init.groovy.d"` — Directory where init scripts live; Jenkins runs them on startup.
+- `global-shared-library.groovy` — Configures the Shared Library and GitHub credentials.
+- `seed-pipeline-job.groovy` — Creates the CloudDevOpsProject pipeline job that uses the Jenkinsfile.
+- `state: restarted` — Restart Jenkins so init scripts run and changes take effect.
+
+---
+
+### Lesson 2.2.5 — File: `ansible/roles/Jenkins/templates/global-shared-library.groovy.j2`
+
+**📄 File:** `ansible/roles/Jenkins/templates/global-shared-library.groovy.j2` (excerpt)
+
+```groovy
+// 1) GitHub credentials (if provided)
+def ghUser = "{{ jenkins_github_username | default('', true) }}"
+def ghToken = "{{ jenkins_github_token | default('', true) }}"
+if (ghUser && ghToken) {
+  def newCreds = new UsernamePasswordCredentialsImpl(GLOBAL, ghCredId, "GitHub credentials", ghUser, ghToken)
+  credsStore.addCredentials(domain, newCreds)
+}
+// 2) Global Pipeline Library
+def libConfig = new LibraryConfiguration(libName, new SCMSourceRetriever(new GitSCMSource(libRepo)))
+libConfig.defaultVersion = libVersion
+libConfig.implicit = false
+libPathField.set(libConfig, "{{ jenkins_shared_library_path | default('Shared-Library', true) }}")
+globalLibs.setLibraries(libs)
+```
+
+**Purpose:** Groovy init script that runs at Jenkins startup. Creates GitHub credentials (if vars are set) and configures the Global Pipeline Library so `@Library('ivolve-shared-library@main')` works.
+
+**Line-by-line:**
+- `ghUser`, `ghToken` — Jinja2 vars from vault or `-e`; empty if not provided.
+- `UsernamePasswordCredentialsImpl` — Creates Jenkins credentials for GitHub (used by pipeline and seed job).
+- `LibraryConfiguration` — Configures the Shared Library from the Git repo.
+- `libPath` — Subfolder in repo (e.g. `Shared-Library`); set via reflection because the API does not expose it directly.
+
+---
+
+### Lesson 2.2.6 — File: `ansible/roles/Jenkins/templates/seed-pipeline-job.groovy.j2`
+
+**📄 File:** `ansible/roles/Jenkins/templates/seed-pipeline-job.groovy.j2`
+
+```groovy
+def jobName = "{{ jenkins_seed_job_name | default('CloudDevOpsProject-pipeline', true) }}"
+def repoUrl = "{{ jenkins_shared_library_repo }}"
+def branch = "{{ jenkins_shared_library_version }}"
+def credId = "{{ jenkins_github_credential_id }}"
+def jenkinsfilePath = "{{ jenkins_seed_job_jenkinsfile | default('Jenkinsfile', true) }}"
+
+def job = j.getItem(jobName)
+if (job == null) { job = j.createProject(WorkflowJob, jobName) }
+
+def scm = new GitSCM(
+  [new UserRemoteConfig(repoUrl, null, null, credId)],
+  [new BranchSpec("*/${branch}")]
+)
+def flowDef = new CpsScmFlowDefinition(scm, jenkinsfilePath)
+job.setDefinition(flowDef)
+job.save()
+```
+
+**Purpose:** Groovy init script that creates or updates the pipeline job. The job clones the repo, loads the Jenkinsfile, and runs the CI/CD pipeline.
+
+**Line-by-line:**
+- `jobName` — Job name in Jenkins (e.g. `CloudDevOpsProject-pipeline`).
+- `repoUrl`, `branch` — Git repo and branch (same as Shared Library).
+- `credId` — Jenkins credential ID for Git clone.
+- `jenkinsfilePath` — Path to Jenkinsfile in repo (e.g. `Jenkinsfile`).
+- `CpsScmFlowDefinition` — Pipeline from SCM: clone repo, run Jenkinsfile.
+- `job.setDefinition(flowDef)` — Attach the pipeline definition to the job.
+
+---
+
+### Lesson 2.3.1 — File: `ansible/roles/alb-iam/files/alb-policy.json`
+
+**📄 File:** `ansible/roles/alb-iam/files/alb-policy.json` (summary)
+
+IAM policy document granting the ALB Controller permissions for EC2, ELB, ACM, WAF, Shield, etc. Same content as `terraform/alb-controller-iam-policy.json`. Terraform attaches this policy to `AWSLoadBalancerControllerRole`; Ansible does not apply it. The file is kept in the role for reference or if used by another mechanism.
+
+**Purpose:** IAM policy used by the AWS Load Balancer Controller. In this project the policy is managed by Terraform; this file documents or mirrors it for the alb-iam role context.
+
+---
+
+### Lesson 2.3.2 — File: `ansible/roles/alb-iam/tasks/main.yaml`
+
+**📄 File:** `ansible/roles/alb-iam/tasks/main.yaml`
+
+```yaml
+---
+- name: Create Kubernetes ServiceAccount manifest for ALB Controller
+  ansible.builtin.template:
+    src: serviceaccount.yaml.j2
+    dest: /tmp/alb-serviceaccount.yaml
+    mode: "0644"
+
+- name: Apply ServiceAccount to cluster
+  ansible.builtin.shell: /usr/local/bin/kubectl apply -f /tmp/alb-serviceaccount.yaml
+  environment:
+    KUBECONFIG: /root/.kube/config
+    PATH: "/usr/local/bin:/usr/bin:/bin"
+  register: sa_apply
+  changed_when: true
+```
+
+**Purpose:** Renders the ServiceAccount manifest with IRSA annotation and applies it to the cluster. The IAM role and policy are created by Terraform; this role only manages the Kubernetes ServiceAccount.
+
+**Line-by-line:**
+- `template` — Renders `serviceaccount.yaml.j2` with `{{ aws_account_id }}` and writes to `/tmp/`.
+- `kubectl apply -f` — Applies the ServiceAccount to the EKS cluster.
+- `KUBECONFIG` — Uses kubeconfig created by the Jenkins role.
+
+---
+
+### Lesson 2.3.3 — File: `ansible/roles/alb-iam/templates/serviceaccount.yaml.j2`
 
 **📄 File:** `ansible/roles/alb-iam/templates/serviceaccount.yaml.j2`
 
@@ -1399,6 +1700,63 @@ repoServer:
 - `dex.enabled: false` — Turn off Dex (auth); avoid `server.secretkey` issues; use Argo CD built-in auth.
 - `repoServer.livenessProbe.enabled: false` — Fargate startup can be slower; default probes can cause CrashLoopBackOff before the pod is ready.
 - `repoServer.readinessProbe.enabled: false` — Same reason; avoids premature restarts during slow startup.
+
+---
+
+### Lesson 2.4.3 — File: `ansible/roles/helm-install/tasks/main.yaml`
+
+**📄 File:** `ansible/roles/helm-install/tasks/main.yaml` (key tasks)
+
+```yaml
+---
+- name: Ensure kubeconfig uses v1beta1 and exec command uses AWS CLI v2
+  ansible.builtin.shell: |
+    sed -i 's/v1alpha1/v1beta1/g' /root/.kube/config
+    sed -i 's/command: aws/command: \/usr\/local\/bin\/aws/g' ...
+
+- name: Install Helm
+  ansible.builtin.shell: curl -fsSL .../get-helm-3 | bash
+  creates: /usr/local/bin/helm
+
+- name: Add EKS Helm repo
+  ansible.builtin.shell: helm repo add eks https://aws.github.io/eks-charts
+
+- name: Add Argo Helm repo
+  ansible.builtin.shell: helm repo add argo https://argoproj.github.io/argo-helm
+
+- name: Remove ALB webhook (so ArgoCD install can create Services)
+  ansible.builtin.shell: kubectl delete mutatingwebhookconfiguration ...
+
+- name: Copy ArgoCD Fargate values / Install ArgoCD
+  ansible.builtin.copy: src: argocd-fargate-values.yaml dest: /tmp/...
+  ansible.builtin.shell: helm upgrade --install argocd argo/argo-cd -n argocd -f /tmp/argocd-fargate-values.yaml
+
+- name: Wait for ArgoCD deployments and pods
+  ansible.builtin.shell: kubectl wait --for=condition=available ... -n argocd
+
+- name: Apply ArgoCD Application
+  ansible.builtin.copy: src: application.yaml dest: /tmp/argocd-application.yaml
+  ansible.builtin.shell: kubectl apply -f /tmp/argocd-application.yaml
+
+- name: Get EKS VPC ID
+  ansible.builtin.shell: aws eks describe-cluster --query 'cluster.resourcesVpcConfig.vpcId' ...
+
+- name: Install AWS Load Balancer Controller
+  ansible.builtin.shell: helm upgrade --install aws-load-balancer-controller ... --set vpcId={{ eks_vpc_id_out.stdout }}
+```
+
+**Purpose:** Installs Helm, Argo CD, and the AWS Load Balancer Controller in the EKS cluster. Fixes kubeconfig for Helm, waits for Argo CD, applies the Application manifest, then installs the ALB controller with VPC ID for Fargate.
+
+**Line-by-line:**
+- `sed v1alpha1 → v1beta1` — Fix kubeconfig exec plugin version for Helm.
+- `sed command: aws → /usr/local/bin/aws` — Use AWS CLI v2 for EKS auth.
+- `helm repo add eks/argo` — Add EKS and Argo Helm repos.
+- `kubectl delete mutatingwebhookconfiguration` — Remove leftover ALB webhook so Argo CD can create Services.
+- `helm upgrade --install argocd` — Install Argo CD with Fargate values.
+- `kubectl wait` — Wait for Argo CD deployments and pods to be ready.
+- `kubectl apply -f argocd-application.yaml` — Deploy the Argo CD Application (syncs `k8s/` from Git).
+- `aws eks describe-cluster --query vpcId` — Get VPC ID; ALB controller on Fargate needs it (no instance metadata).
+- `helm upgrade --install aws-load-balancer-controller` — Install ALB controller with `vpcId` and Fargate values.
 
 ---
 
