@@ -1201,6 +1201,207 @@ This chapter explains how Ansible is used to turn the bare Jenkins EC2 instance 
 
 ---
 
+### Lesson 2.1.1 — File: `ansible/inventory/ec2.aws_ec2.yaml`
+
+**📄 File:** `ansible/inventory/ec2.aws_ec2.yaml`
+
+```yaml
+---
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+filters:
+  instance-state-name: running
+  tag:service: jenkins
+keyed_groups:
+  - key: tags.service
+    prefix: service
+hostnames:
+  - public-ip-address
+  - private-ip-address
+compose:
+  ansible_host: public_ip_address
+  ansible_user: ec2-user
+  ansible_ssh_private_key_file: "~/.ssh/Jenkins_key.pem"
+```
+
+**Purpose:** Dynamic inventory discovers Jenkins EC2 instances from AWS by tags. Creates `service_jenkins` group so the playbook targets only Jenkins hosts.
+
+**Line-by-line:**
+- `---` — YAML document start.
+- `plugin: amazon.aws.aws_ec2` — Use the AWS EC2 inventory plugin to query EC2 API instead of a static host file.
+- `regions: [us-east-1]` — Only discover instances in us-east-1; must match where Terraform created Jenkins.
+- `filters:` — Narrow results:
+  - `instance-state-name: running` — Ignore stopped/terminated instances.
+  - `tag:service: jenkins` — Only instances with `service=jenkins`; matches Terraform `jenkins_ansible_tag`.
+- `keyed_groups:` — Create groups from tags:
+  - `key: tags.service`, `prefix: service` → group `service_jenkins` for `tag:service=jenkins`.
+- `hostnames:` — Use public/private IP as host identifier.
+- `compose:` — Override connection variables:
+  - `ansible_host: public_ip_address` — Connect via public IP (Jenkins is in a public subnet).
+  - `ansible_user: ec2-user` — Standard Amazon Linux 2 user.
+  - `ansible_ssh_private_key_file` — Path to the `.pem`; must match `jenkins_key_name` in Terraform.
+
+---
+
+### Lesson 2.1.2 — File: `ansible/main.yaml`
+
+**📄 File:** `ansible/main.yaml`
+
+```yaml
+---
+- name: Bootstrap Python 3.8 on Jenkins hosts
+  hosts: service_jenkins
+  gather_facts: false
+  become: yes
+  vars:
+    ansible_become_timeout: 120
+  tasks:
+    - name: Install Python 3.8 and pip (Amazon Linux 2)
+      ansible.builtin.raw: |
+        amazon-linux-extras enable -y python3.8
+        yum install -y python3.8
+      args:
+        executable: /bin/bash
+    - name: Ensure Python 3.8 is available
+      ansible.builtin.raw: test -x /usr/bin/python3.8 && /usr/bin/python3.8 -c 'import sys; print(sys.version)'
+      ...
+- name: Setup required packages, Jenkins, HELM in EKS, ALB IAM Setup
+  hosts: service_jenkins
+  become: yes
+  gather_facts: yes
+  vars:
+    cluster_name: "ivolve-eks"
+    aws_account_id: "183631347882"
+    aws_region: "us-east-1"
+  roles:
+    - role: Jenkins
+    - role: alb-iam
+    - role: helm-install
+```
+
+**Purpose:** Two-play playbook: first bootstraps Python 3.8 so Ansible modules can run; second applies Jenkins, alb-iam, and helm-install roles to configure the CI/CD host and cluster add-ons.
+
+**Line-by-line:**
+- `name: Bootstrap Python 3.8` — First play: install Python on targets before using normal Ansible modules.
+- `hosts: service_jenkins` — Run only on hosts in `service_jenkins` (from dynamic inventory).
+- `gather_facts: false` — Skip fact gathering because Python 3.8 may not exist yet.
+- `become: yes` — Run as root (needed for yum).
+- `ansible.builtin.raw` — Run raw shell; avoids requiring Python on the target.
+- `amazon-linux-extras enable python3.8` — Enable Python 3.8 repo on Amazon Linux 2.
+- `yum install -y python3.8` — Install Python so subsequent plays can use modules.
+- Second play: `gather_facts: yes` — Now facts can be gathered.
+- `vars:` — Must match Terraform: `cluster_name` = EKS name, `aws_account_id`, `aws_region`.
+- `roles:` — Jenkins (packages, Jenkins, Shared Library), alb-iam (ServiceAccount), helm-install (Argo CD, ALB Controller).
+
+---
+
+
+---
+
+### Lesson 2.2.1 — File: `ansible/roles/Jenkins/defaults/main.yml`
+
+**📄 File:** `ansible/roles/Jenkins/defaults/main.yml`
+
+```yaml
+---
+jenkins_shared_library_name: "ivolve-shared-library"
+jenkins_shared_library_version: "main"
+jenkins_shared_library_repo: "https://github.com/tarek-code/CloudDevOpsProject.git"
+jenkins_shared_library_path: "Shared-Library"
+jenkins_home: "/var/lib/jenkins"
+jenkins_sysconfig: "/etc/sysconfig/jenkins"
+jenkins_github_credential_id: "github-credentials"
+```
+
+**Purpose:** Default variables for the Jenkins role. Shared Library config and credential ID are used by Groovy init scripts to configure Jenkins on startup.
+
+**Line-by-line:**
+- `jenkins_shared_library_name` — Name shown in Jenkins UI; matches `@Library('ivolve-shared-library@main')` in Jenkinsfile.
+- `jenkins_shared_library_version` — Branch/tag to use (e.g. `main`).
+- `jenkins_shared_library_repo` — Git URL of the repo containing the Shared Library.
+- `jenkins_shared_library_path` — Subfolder in repo with `vars/` (e.g. `Shared-Library`).
+- `jenkins_home` — Jenkins data directory on Amazon Linux 2.
+- `jenkins_sysconfig` — Sysconfig file for Jenkins service.
+- `jenkins_github_credential_id` — Jenkins credential ID for GitHub (used by Shared Library and seed job).
+
+---
+
+### Lesson 2.3.1 — File: `ansible/roles/alb-iam/templates/serviceaccount.yaml.j2`
+
+**📄 File:** `ansible/roles/alb-iam/templates/serviceaccount.yaml.j2`
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aws-load-balancer-controller
+  namespace: kube-system
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::{{ aws_account_id }}:role/AWSLoadBalancerControllerRole
+```
+
+**Purpose:** Creates the Kubernetes ServiceAccount used by the AWS Load Balancer Controller. The IRSA annotation tells AWS which IAM role the controller should assume when calling AWS APIs.
+
+**Line-by-line:**
+- `apiVersion: v1`, `kind: ServiceAccount` — Standard Kubernetes ServiceAccount.
+- `metadata.name: aws-load-balancer-controller` — Must match the name Helm uses for the controller.
+- `metadata.namespace: kube-system` — Same namespace as the controller pods.
+- `annotations.eks.amazonaws.com/role-arn` — IRSA annotation; EKS injects credentials for this IAM role into pods using this ServiceAccount. `{{ aws_account_id }}` comes from playbook vars.
+
+---
+
+### Lesson 2.4.1 — File: `ansible/roles/helm-install/files/alb-controller-fargate-values.yaml`
+
+**📄 File:** `ansible/roles/helm-install/files/alb-controller-fargate-values.yaml`
+
+```yaml
+enableBackendSecurityGroup: false
+tolerations:
+  - key: eks.amazonaws.com/compute-type
+    operator: Equal
+    value: fargate
+    effect: NoSchedule
+```
+
+**Purpose:** Helm values for the AWS Load Balancer Controller on EKS Fargate. Disables the backend security group to avoid ALB reachability issues, and allows pods to run on Fargate nodes.
+
+**Line-by-line:**
+- `enableBackendSecurityGroup: false` — Controller uses only the Managed (frontend) SG for ALBs. Avoids attaching the Shared Backend SG, which has no inbound rules and can block ALB → pod traffic.
+- `tolerations:` — EKS Fargate nodes have taint `eks.amazonaws.com/compute-type=fargate:NoSchedule`. These tolerations allow the controller to be scheduled there.
+
+---
+
+### Lesson 2.4.2 — File: `ansible/roles/helm-install/files/argocd-fargate-values.yaml`
+
+**📄 File:** `ansible/roles/helm-install/files/argocd-fargate-values.yaml`
+
+```yaml
+global:
+  tolerations:
+    - key: eks.amazonaws.com/compute-type
+      operator: Equal
+      value: fargate
+      effect: NoSchedule
+dex:
+  enabled: false
+repoServer:
+  livenessProbe:
+    enabled: false
+  readinessProbe:
+    enabled: false
+```
+
+**Purpose:** Helm values for Argo CD on EKS Fargate. Enables scheduling on Fargate and reduces probe-related restarts on slower startup.
+
+**Line-by-line:**
+- `global.tolerations` — Same Fargate taint toleration; Argo CD pods can run on Fargate.
+- `dex.enabled: false` — Turn off Dex (auth); avoid `server.secretkey` issues; use Argo CD built-in auth.
+- `repoServer.livenessProbe.enabled: false` — Fargate startup can be slower; default probes can cause CrashLoopBackOff before the pod is ready.
+- `repoServer.readinessProbe.enabled: false` — Same reason; avoids premature restarts during slow startup.
+
+---
+
 ## CHAPTER 3 — The Application
 
 This chapter describes the simple **Flask** application in `app-project/`:
@@ -1211,6 +1412,82 @@ This chapter describes the simple **Flask** application in `app-project/`:
 - `static/style.css` — basic styling.
 
 It shows how the application is structured, how Flask routes work, and how these files are copied and run inside the Docker container (see CHAPTER 4).
+
+---
+
+### Lesson 3.1 — File: `app-project/app.py`
+
+**📄 File:** `app-project/app.py`
+
+```python
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+```
+
+**Purpose:** Flask app with one route `/` that renders `index.html`. `host="0.0.0.0"` lets the app accept external connections inside the container; `port=5000` is exposed to the Service and Ingress.
+
+**Line-by-line:**
+- `from flask import Flask, render_template` — Imports Flask and `render_template` to serve HTML.
+- `app = Flask(__name__)` — Creates the Flask app instance.
+- `@app.route("/")` — Registers the root path as the route.
+- `def index(): return render_template("index.html")` — Serves `templates/index.html` for `/`.
+- `if __name__ == "__main__"` — Runs the app only when the script is executed directly.
+- `app.run(host="0.0.0.0", port=5000)` — Binds to all interfaces (`0.0.0.0`) so it is reachable from outside the container; uses port 5000, which the K8s Service and Ingress reference.
+
+---
+
+### Lesson 3.2 — File: `app-project/requirements.txt`
+
+**📄 File:** `app-project/requirements.txt`
+
+```text
+flask
+```
+
+**Purpose:** Declares the app’s Python dependency. Docker uses this file to install packages before copying app code so dependency layers can be cached.
+
+**Line-by-line:**
+- `flask` — Flask web framework; required for the app. Version can be pinned (e.g. `flask>=3.0`) for reproducibility.
+
+---
+
+### Lesson 3.3 — File: `app-project/templates/index.html`
+
+**📄 File:** `app-project/templates/index.html`
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NTI x iVolve Graduation Project</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>DevOps Graduation Project</h1>
+        <h2>In Collaboration with iVolve Technologies</h2>
+        ...
+    </div>
+</body>
+</html>
+```
+
+**Purpose:** HTML template for the landing page. Uses Flask’s `url_for` to link to static assets and shows the graduation project title and logos.
+
+**Line-by-line:**
+- `<!DOCTYPE html>`, `<html lang="en">` — Standard HTML5 structure.
+- `{{ url_for('static', filename='style.css') }}` — Jinja2 expression; Flask generates the correct URL for `static/style.css`.
+- `.container` — Main layout wrapper.
+- Content includes NTI/iVolve branding and description.
 
 ---
 
@@ -1225,6 +1502,33 @@ This chapter breaks down `docker/Dockerfile` line‑by‑line:
 - Exposing port 5000 and using `CMD ["python", "app.py"]`.
 
 It also discusses best practices (single vs multi‑stage builds, image size, reproducibility).
+
+---
+
+### Lesson 4.1 — File: `docker/Dockerfile`
+
+**📄 File:** `docker/Dockerfile`
+
+```dockerfile
+FROM python:3.10-slim
+WORKDIR /app
+COPY app-project/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app-project/ .
+EXPOSE 5000
+CMD ["python", "app.py"]
+```
+
+**Purpose:** Builds the Flask app image used by Jenkins and EKS. Uses layered caching and a slim base image for a small, reproducible image.
+
+**Line-by-line:**
+- `FROM python:3.10-slim` — Slim Debian-based image; smaller than `python:3.10` and sufficient for Flask.
+- `WORKDIR /app` — Sets the working directory for following commands and for the app runtime.
+- `COPY app-project/requirements.txt .` — Copies only the requirements file first so `pip install` can be cached if dependencies do not change.
+- `RUN pip install --no-cache-dir -r requirements.txt` — Installs dependencies; `--no-cache-dir` keeps the image smaller.
+- `COPY app-project/ .` — Copies the rest of the app; this layer changes more often than the pip layer.
+- `EXPOSE 5000` — Documents that the app listens on 5000; does not publish the port.
+- `CMD ["python", "app.py"]` — Default command; starts the Flask app when the container runs.
 
 ---
 
@@ -1245,6 +1549,222 @@ This chapter explains:
   - `removeImageLocally.groovy` — cleans up images on the Jenkins node.
 
 It shows how using a Shared Library keeps the Jenkinsfile short and readable while centralizing complex shell logic.
+
+---
+
+### Lesson 5.1 — File: `Jenkinsfile`
+
+**📄 File:** `Jenkinsfile` (excerpt)
+
+```groovy
+@Library('ivolve-shared-library@main') _
+
+pipeline {
+    agent any
+    environment {
+        IMAGE_TAG    = "${env.BUILD_NUMBER}"
+        ECR_REGISTRY = "183631347882.dkr.ecr.us-east-1.amazonaws.com"
+        ECR_IMAGE    = "${ECR_REGISTRY}/ivolve-app"
+        AWS_REGION   = "us-east-1"
+        GITHUB_CREDENTIAL_ID = "github-credentials"
+        GITHUB_REPO_URL      = "https://github.com/tarek-code/CloudDevOpsProject.git"
+    }
+    stages {
+        stage('Checkout') { ... }
+        stage('BuildImage') { buildImage(imageName, workDir, 'docker/Dockerfile') }
+        stage('ScanImage') { scanImage(imageName) }
+        stage('PushImage') { pushImageECR(imageName, AWS_REGION) }
+        stage('RemoveImageLocally') { removeImageLocally(imageName) }
+        stage('UpdateManifests') { updateManifests(imageUrl, manifestsDir) }
+        stage('PushManifests') { pushManifests(...) }
+    }
+    post { always { deleteDir() } success { ... } failure { ... } }
+}
+```
+
+**Purpose:** Declarative pipeline using `ivolve-shared-library`. Runs stages: Checkout → BuildImage → ScanImage → PushImage → RemoveImageLocally → UpdateManifests → PushManifests. Environment variables define ECR and GitHub.
+
+**Line-by-line:**
+- `@Library('ivolve-shared-library@main') _` — Loads the Shared Library from branch `main`; `_` means no import alias.
+- `agent any` — Runs on any available Jenkins agent.
+- `IMAGE_TAG = "${env.BUILD_NUMBER}"` — Uses build number as image tag.
+- `ECR_REGISTRY`, `ECR_IMAGE` — ECR URL and image name; must match Terraform ECR and Jenkins IAM.
+- `GITHUB_CREDENTIAL_ID`, `GITHUB_REPO_URL` — Jenkins credential for push; repo URL for manifests.
+- `stage('Checkout')` — Clones the app repo (via SCM or manual clone).
+- `stage('BuildImage')` — Calls `buildImage(...)` to build the Docker image.
+- `stage('ScanImage')` — Calls `scanImage(...)` for Trivy vulnerability scan.
+- `stage('PushImage')` — Calls `pushImageECR(...)` to push to ECR.
+- `stage('RemoveImageLocally')` — Calls `removeImageLocally(...)` to free disk.
+- `stage('UpdateManifests')` — Calls `updateManifests(...)` to update `k8s/deployment.yaml`.
+- `stage('PushManifests')` — Calls `pushManifests(...)` to commit and push to GitHub.
+- `post { always { deleteDir() } }` — Always deletes workspace after the run.
+
+---
+
+### Lesson 5.2.1 — File: `Shared-Library/vars/buildImage.groovy`
+
+**📄 File:** `Shared-Library/vars/buildImage.groovy`
+
+```groovy
+def call(String imageName, String workDir = '.', String dockerfilePath = null) {
+    dir(workDir) {
+        script {
+            def dockerfile = dockerfilePath ?: 'Dockerfile'
+            if (!fileExists(dockerfile)) { error("Dockerfile not found: ${workDir}/${dockerfile}") }
+            def buildCmd = dockerfilePath
+                ? "docker build -f ${dockerfilePath} -t ${imageName} ."
+                : "docker build -t ${imageName} ."
+            sh """
+                ${buildCmd}
+                docker tag ${imageName} ${imageName.split(':')[0]}:latest
+            """
+        }
+    }
+}
+```
+
+**Purpose:** Builds the Docker image and tags it as `latest`. Centralizes the build command in the Shared Library.
+
+**Line-by-line:**
+- `def call(String imageName, ...)` — Groovy callable; invoked as `buildImage(imageName, workDir, dockerfilePath)`.
+- `dir(workDir)` — Executes inside the given working directory (e.g. project root).
+- `dockerfilePath ?: 'Dockerfile'` — Uses provided path or default `Dockerfile`.
+- `docker build -f ${dockerfilePath} -t ${imageName} .` — Builds using a custom Dockerfile (e.g. `docker/Dockerfile`).
+- `docker tag ${imageName} ${imageName.split(':')[0]}:latest` — Tags the same image as `latest` for convenience.
+
+---
+
+### Lesson 5.2.2 — File: `Shared-Library/vars/scanImage.groovy`
+
+**📄 File:** `Shared-Library/vars/scanImage.groovy` (excerpt)
+
+```groovy
+def call(String imageName) {
+    script {
+        def trivyPath = sh(script: 'which trivy || echo "not found"', returnStdout: true).trim()
+        if (trivyPath == 'not found') {
+            // Install Trivy via direct download (pinned v0.69.1)
+            TRIVY_TAG=v0.69.1
+            wget ... trivy_0.69.1_Linux-64bit.tar.gz
+        }
+        sh "trivy image --exit-code 0 --severity HIGH,CRITICAL ${imageName}"
+    }
+}
+```
+
+**Purpose:** Scans the built image with Trivy for HIGH/CRITICAL vulnerabilities. Installs Trivy if needed; does not fail the pipeline on findings (`--exit-code 0`).
+
+**Line-by-line:**
+- `which trivy || echo "not found"` — Checks if Trivy is installed.
+- If not found: installs Trivy (pinned `v0.69.1`) via direct download for reliability.
+- `trivy image --exit-code 0 --severity HIGH,CRITICAL` — Scans image; exit 0 so findings do not fail the build; limits to HIGH and CRITICAL severities.
+
+---
+
+### Lesson 5.2.3 — File: `Shared-Library/vars/pushImageECR.groovy`
+
+**📄 File:** `Shared-Library/vars/pushImageECR.groovy`
+
+```groovy
+def call(String imageName, String region = 'us-east-1') {
+    script {
+        def registry = (imageName =~ /^([^\/]+)/)[0][1]
+        sh """
+            aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${registry}
+        """
+        sh "docker push ${imageName}"
+    }
+}
+```
+
+**Purpose:** Logs into ECR and pushes the image. Uses the instance role for auth.
+
+**Line-by-line:**
+- `def registry = (imageName =~ /^([^\/]+)/)[0][1]` — Extracts registry from image name (e.g. `183631347882.dkr.ecr.us-east-1.amazonaws.com`).
+- `aws ecr get-login-password | docker login --username AWS --password-stdin` — Gets ECR token and logs Docker into ECR.
+- `docker push ${imageName}` — Pushes the image to ECR.
+
+---
+
+### Lesson 5.2.4 — File: `Shared-Library/vars/updateManifests.groovy`
+
+**📄 File:** `Shared-Library/vars/updateManifests.groovy`
+
+```groovy
+def call(String imageUrl, String manifestsDir = 'k8s') {
+    dir(manifestsDir) {
+        script {
+            sh """
+                sed -i -E 's|^([[:space:]]*image:[[:space:]]*).*|\\1${imageUrl}|' deployment.yaml
+                grep -q "image: ${imageUrl}" deployment.yaml || echo "Warning: Image update may have failed"
+            """
+        }
+    }
+}
+```
+
+**Purpose:** Updates the `image:` field in `k8s/deployment.yaml` with the newly built image URL so Argo CD deploys the new version.
+
+**Line-by-line:**
+- `dir(manifestsDir)` — Runs in `k8s/` by default.
+- `sed -i -E 's|^([[:space:]]*image:[[:space:]]*).*|\\1${imageUrl}|'` — Replaces the image value while keeping indentation; `-i` edits in place.
+- `grep -q "image: ${imageUrl}"` — Checks that the update was applied.
+
+---
+
+### Lesson 5.2.5 — File: `Shared-Library/vars/pushManifests.groovy`
+
+**📄 File:** `Shared-Library/vars/pushManifests.groovy` (excerpt)
+
+```groovy
+def call(String commitMessage = null, String manifestsDir = 'k8s', String branch = null, String credentialId = null, String repoUrl = null) {
+    def msg = commitMessage ?: "CI: update manifests for build ${env.BUILD_NUMBER}"
+    def targetBranch = branch ?: (env.BRANCH_NAME ?: 'main')
+    sh """
+        git config user.email 'jenkins@localhost'
+        git config user.name 'Jenkins'
+        git add ${manifestsDir}/
+        git diff --staged --quiet || git commit -m '${msg}'
+    """
+    withCredentials([usernamePassword(credentialsId: credentialId, ...)]) {
+        sh "git push origin HEAD:${targetBranch}"
+    }
+}
+```
+
+**Purpose:** Commits updated manifests and pushes them to GitHub so Argo CD can sync the new image. Uses Jenkins credentials for authentication.
+
+**Line-by-line:**
+- `commitMessage ?: "CI: update manifests..."` — Uses provided message or a default.
+- `targetBranch` — Target branch (e.g. `main`).
+- `git add ${manifestsDir}/` — Stages `k8s/` (or given dir).
+- `git diff --staged --quiet || git commit` — Commits only if there are changes.
+- `withCredentials` — Uses Jenkins credential for Git push.
+
+---
+
+### Lesson 5.2.6 — File: `Shared-Library/vars/removeImageLocally.groovy`
+
+**📄 File:** `Shared-Library/vars/removeImageLocally.groovy`
+
+```groovy
+def call(String imageName) {
+    script {
+        def imageRepo = imageName.split(':')[0]
+        sh """
+            docker rmi ${imageName} || echo "Image ${imageName} not found"
+            docker rmi ${imageRepo}:latest || echo "Image ${imageRepo}:latest not found"
+        """
+    }
+}
+```
+
+**Purpose:** Removes the built image and its `:latest` tag from the local Docker daemon to free disk space on the Jenkins agent.
+
+**Line-by-line:**
+- `imageRepo = imageName.split(':')[0]` — Extracts repository without tag (e.g. `183631347882.dkr.ecr.us-east-1.amazonaws.com/ivolve-app`).
+- `docker rmi ${imageName}` — Removes the tagged image.
+- `docker rmi ${imageRepo}:latest` — Removes the `:latest` tag created by buildImage.
 
 ---
 
@@ -1271,6 +1791,56 @@ This chapter covers:
 
 ---
 
+### Lesson 6.1 — File: `argocd/application.yaml`
+
+**📄 File:** `argocd/application.yaml`
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ivolve-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/tarek-code/CloudDevOpsProject.git
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ivolve
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+```
+
+**Purpose:** Defines the Argo CD Application that watches the `k8s/` folder in Git and syncs it to the EKS cluster. Enables automated sync, prune, and self-heal for GitOps.
+
+**Line-by-line:**
+- `apiVersion: argoproj.io/v1alpha1`, `kind: Application` — Argo CD Application CRD.
+- `metadata.name: ivolve-app` — Application name in Argo CD UI.
+- `metadata.namespace: argocd` — Application CR lives in the argocd namespace.
+- `finalizers: resources-finalizer.argocd.argoproj.io` — Ensures resources are cleaned up when the Application is deleted.
+- `spec.project: default` — Uses the default Argo CD project.
+- `spec.source.repoURL` — Git repo URL (same repo as the app).
+- `spec.source.targetRevision: main` — Branch to watch.
+- `spec.source.path: k8s` — Path inside the repo containing manifests.
+- `spec.destination.server: https://kubernetes.default.svc` — Target cluster (in-cluster API).
+- `spec.destination.namespace: ivolve` — Target namespace for deployed resources.
+- `syncPolicy.automated.prune: true` — Removes resources no longer in Git.
+- `syncPolicy.automated.selfHeal: true` — Reverts manual changes to match Git.
+- `syncOptions: CreateNamespace=true` — Creates the `ivolve` namespace if missing.
+- `syncOptions: PruneLast=true` — Deletes pruned resources after sync.
+
+---
+
 #### 6.x — Argo CD Showing the App in Sync
 
 1. Open the Argo CD web UI and log in.  
@@ -1291,6 +1861,144 @@ This chapter walks through:
 - `k8s/ingress.yaml` — Ingress definition with ALB annotations (scheme, target-type, listen-ports, inbound-cidrs).
 
 You’ll see how these manifests represent the final, desired state that Argo CD syncs to EKS.
+
+---
+
+### Lesson 7.1 — File: `k8s/namespace.yaml`
+
+**📄 File:** `k8s/namespace.yaml`
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ivolve
+```
+
+**Purpose:** Creates the `ivolve` namespace for the app. Must match the Fargate profile selector and Argo CD destination namespace.
+
+**Line-by-line:**
+- `apiVersion: v1`, `kind: Namespace` — Standard Kubernetes Namespace resource.
+- `metadata.name: ivolve` — Namespace name; used by Fargate profile, Argo CD, and all app resources.
+
+---
+
+### Lesson 7.2 — File: `k8s/deployment.yaml`
+
+**📄 File:** `k8s/deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ivolve-app
+  namespace: ivolve
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ivolve-app
+  template:
+    metadata:
+      labels:
+        app: ivolve-app
+    spec:
+      containers:
+        - name: ivolve-app
+          image: 183631347882.dkr.ecr.us-east-1.amazonaws.com/ivolve-app:4
+          ports:
+            - containerPort: 5000
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 200m, memory: 256Mi }
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5000
+```
+
+**Purpose:** Defines the Flask app Deployment. Jenkins updates the `image` tag; Argo CD syncs it to EKS; Fargate runs the pods.
+
+**Line-by-line:**
+- `replicas: 3` — Runs 3 pod replicas for availability.
+- `selector.matchLabels: app: ivolve-app` — Selects pods with label `app=ivolve-app`.
+- `template.metadata.labels` — Same labels as selector.
+- `image:` — ECR image; Jenkins updates the tag each build.
+- `containerPort: 5000` — Port the Flask app listens on.
+- `resources` — Requests and limits for Fargate sizing.
+- `livenessProbe.httpGet path: / port: 5000` — Liveness check on the app root; restarts unhealthy pods.
+
+---
+
+### Lesson 7.3 — File: `k8s/service.yaml`
+
+**📄 File:** `k8s/service.yaml`
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ivolve-app-service
+  namespace: ivolve
+spec:
+  type: ClusterIP
+  selector:
+    app: ivolve-app
+  ports:
+    - port: 80
+      targetPort: 5000
+```
+
+**Purpose:** Exposes the Deployment as a ClusterIP Service. The Ingress (via ALB) sends traffic to this Service on port 80, which forwards to the containers on port 5000.
+
+**Line-by-line:**
+- `type: ClusterIP` — Cluster-internal only; Ingress/ALB uses it as backend.
+- `selector: app: ivolve-app` — Targets pods with that label (Deployment pods).
+- `port: 80` — Port the Service listens on; Ingress backend references this.
+- `targetPort: 5000` — Port on the pod containers; matches Flask.
+
+---
+
+### Lesson 7.4 — File: `k8s/ingress.yaml`
+
+**📄 File:** `k8s/ingress.yaml`
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ivolve-app-ingress
+  namespace: ivolve
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/inbound-cidrs: 0.0.0.0/0,::/0
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ivolve-app-service
+                port:
+                  number: 80
+```
+
+**Purpose:** Ingress resource that instructs the AWS Load Balancer Controller to create an internet-facing ALB. Routes HTTP traffic on port 80 to the Service.
+
+**Line-by-line:**
+- `kubernetes.io/ingress.class: alb` — Use the AWS ALB controller.
+- `alb.ingress.kubernetes.io/scheme: internet-facing` — ALB in public subnets for external access.
+- `alb.ingress.kubernetes.io/target-type: ip` — Required for Fargate; target pod IPs directly.
+- `alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'` — Listener on port 80.
+- `alb.ingress.kubernetes.io/inbound-cidrs: 0.0.0.0/0,::/0` — Allow all sources.
+- `path: /`, `pathType: Prefix` — All paths go to the backend.
+- `backend.service.name: ivolve-app-service` — Backend Service.
+- `backend.service.port.number: 80` — Service port.
 
 ---
 
